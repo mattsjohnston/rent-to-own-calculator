@@ -2,6 +2,7 @@ import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 from streamlit_extras.add_vertical_space import add_vertical_space
+from streamlit_extras.row import row
 import numpy_financial as npf
 import requests
 
@@ -196,7 +197,7 @@ def create_equity_pie_chart(total_principal, renter_share_appreciation):
     return fig
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
-def calculate_comparison_values(house_price, property_tax_rate, appreciation_rate, years, monthly_rent, total_equity, down_payment_ratio, price_to_rent_ratio, investment_return_rate):
+def calculate_comparison_values(house_price, property_tax_rate, appreciation_rate, years, monthly_rent, total_equity, down_payment_ratio, price_to_rent_ratio, investment_return_rate, marginal_tax_rate):
     current_mortgage_rate = get_current_mortgage_rate()
     traditional_loan = house_price * (1 - down_payment_ratio)
     mortgage_payment = npf.pmt(current_mortgage_rate/12, LOAN_TERM_YEARS*12, -traditional_loan)
@@ -224,6 +225,15 @@ def calculate_comparison_values(house_price, property_tax_rate, appreciation_rat
     traditional_cost = traditional_spent - traditional_equity + traditional_opportunity_cost
     renting_cost = renting_spent - rental_equity + renting_opportunity_cost
 
+    # Calculate total interest paid for traditional mortgage
+    total_interest_paid = sum(calculate_monthly_breakdown(traditional_loan, current_mortgage_rate, LOAN_TERM_YEARS, month)[1] for month in range(1, years*12+1))
+    
+    # Calculate tax savings from mortgage interest deduction
+    tax_savings = total_interest_paid * marginal_tax_rate
+    
+    # Adjust the traditional cost to include tax savings
+    traditional_cost -= tax_savings
+
     return {
         'current_mortgage_rate': current_mortgage_rate,
         'traditional_payment': traditional_payment,
@@ -236,7 +246,8 @@ def calculate_comparison_values(house_price, property_tax_rate, appreciation_rat
         'rent_to_own_cost': rent_to_own_cost,
         'traditional_cost': traditional_cost,
         'renting_cost': renting_cost,
-        'price_to_rent_ratio': price_to_rent_ratio
+        'price_to_rent_ratio': price_to_rent_ratio,
+        'tax_savings': tax_savings
     }
 
 # Sidebar inputs
@@ -250,6 +261,7 @@ with st.sidebar:
         property_tax_rate = st.number_input("Property Tax Rate (%)", min_value=0.0, max_value=5.0, value=1.122, step=0.001) / 100
         investment_return_rate = st.number_input("Investment Return Rate (%)", min_value=0.0, max_value=20.0, value=5.0, step=0.1, help="The rate of return you expect to earn in an investment account. This is used to calculate the opportunity cost of the down payment if you were to invest it instead of using it for a traditional mortgage.") / 100
         price_to_rent_ratio = st.number_input("Price-to-Rent Ratio", min_value=1, max_value=50, value=19, step=1, help="The ratio of the price of the home to the rent of a similar home. This is used to calculate the monthly rent of an equivalent home for comparison purposes.")
+        marginal_tax_rate = st.number_input("Marginal Tax Rate (%)", min_value=0.0, max_value=50.0, value=16.0, step=0.1, help="Your marginal tax rate. This is used to calculate the tax savings from the mortgage interest deduction.") / 100
 
 # Set up the main title and description
 st.title("Rent-to-Own Calculator")
@@ -302,8 +314,22 @@ add_vertical_space(1)
 st.plotly_chart(equity_fig, use_container_width=True)
 add_vertical_space(1)
 
+row1 = row([10, 1], vertical_align="center")
 # Comparison of different scenarios
-st.markdown(f"#### After :blue[{years}] years, how does the cost compare to renting?")
+row1.markdown(f"#### In :blue[{years}] years, how does the cost compare to renting?")
+
+# Add toggles for including down payment opportunity cost and tax deductions
+with row1.popover(":gear:"):
+    include_opportunity_cost = st.toggle(
+        "Include down payment opportunity cost",
+        value=True,
+        help="If enabled, calculates the potential earnings lost by using money for a down payment instead of investing it."
+    )
+    include_tax_deductions = st.toggle(
+        "Include tax deductions",
+        value=True,
+        help="If enabled, includes the tax savings from mortgage interest deductions in the calculations."
+    )
 
 # Calculate comparison values
 comparison_values = calculate_comparison_values(
@@ -315,48 +341,65 @@ comparison_values = calculate_comparison_values(
     total_equity, 
     DOWN_PAYMENT_RATIO, 
     price_to_rent_ratio, 
-    investment_return_rate
+    investment_return_rate, 
+    marginal_tax_rate
 )
 
-# Prepare comparison data for display
+add_vertical_space(1)
+# Recalculate costs based on toggle settings
+if not include_opportunity_cost:
+    comparison_values['traditional_cost'] -= (comparison_values['traditional_cost'] - comparison_values['traditional_spent'] + comparison_values['traditional_equity'])
+
+if not include_tax_deductions:
+    comparison_values['traditional_cost'] += comparison_values['tax_savings']
+
+# Create full comparison data
 comparison_data = {
     "": ["Initial purchase price", "Down payment", "Interest rate", "Appreciation share", "Monthly payment", 
-            f"Total equity ({years} years)", f"Total spent ({years} years)", 
-            "Down payment opportunity cost", "Total true cost"],
+         f"Total equity ({years} years)", f"Total spent ({years} years)",
+         "Down payment opportunity cost", "Tax savings (mortgage interest)", "Total true cost"],
     "Rent to Own": [f"${house_price:,.0f}", "$0", f"{0.035:.1%}", "50%", f"${monthly_rent:,.0f}", 
-                    f"${total_equity:,.0f}", f"${comparison_values['rent_to_own_spent']:,.0f}", 
-                    "$0", f"${comparison_values['rent_to_own_cost']:,.0f}"],
+                    f"${total_equity:,.0f}", f"${comparison_values['rent_to_own_spent']:,.0f}",
+                    "$0", "$0", f"${comparison_values['rent_to_own_cost']:,.0f}"],
     "Traditional Mortgage": [f"${house_price:,.0f}", f"${comparison_values['down_payment']:,.0f}", f"{comparison_values['current_mortgage_rate']:.2%}", "100%", 
-                                f"${comparison_values['traditional_payment']:,.0f}", f"${comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_spent']:,.0f}", 
-                                f"${comparison_values['traditional_cost'] - comparison_values['traditional_spent'] + comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_cost']:,.0f}"],
+                             f"${comparison_values['traditional_payment']:,.0f}", f"${comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_spent']:,.0f}",
+                             f"${comparison_values['traditional_cost'] - comparison_values['traditional_spent'] + comparison_values['traditional_equity']:,.0f}",
+                             f"${comparison_values['tax_savings']:,.0f}", f"${comparison_values['traditional_cost']:,.0f}"],
     "Renting": ["$0", "$0", "", "0%", f"${comparison_values['rental_payment']:,.0f}", 
-                "$0", f"${comparison_values['renting_spent']:,.0f}", 
-                "$0", f"${comparison_values['renting_cost']:,.0f}"]
+                "$0", f"${comparison_values['renting_spent']:,.0f}",
+                "$0", "$0", f"${comparison_values['renting_cost']:,.0f}"]
 }
+
+# Create DataFrame for detailed comparison
+df = pd.DataFrame(comparison_data)
+
+# Remove rows based on toggle states
+if not include_opportunity_cost:
+    df = df.drop(df.index[df.iloc[:, 0] == "Down payment opportunity cost"])
+
+if not include_tax_deductions:
+    df = df.drop(df.index[df.iloc[:, 0] == "Tax savings (mortgage interest)"])
+
+# Reset index after dropping rows
+df = df.reset_index(drop=True)
 
 # Display total cost metrics for each scenario
 col1, col2, col3 = st.columns(3)
 with col1:
-    delta_rent_to_own = comparison_values['rent_to_own_cost'] - comparison_values['rent_to_own_cost']
     st.metric("Rent to Own Cost", 
               f"${comparison_values['rent_to_own_cost']:,.0f}")
 with col2:
-    delta_traditional = comparison_values['traditional_cost'] - comparison_values['rent_to_own_cost']
+    delta_traditional = comparison_values['rent_to_own_cost'] - comparison_values['traditional_cost']
     st.metric("Traditional Mortgage Cost", 
               f"${comparison_values['traditional_cost']:,.0f}", 
-              delta=f"${delta_traditional:,.0f}",
+              delta=f"{'-' if delta_traditional > 0 else ''}${abs(delta_traditional):,.0f}",
               delta_color="inverse")
 with col3:
-    delta_renting = comparison_values['renting_cost'] - comparison_values['rent_to_own_cost']
-    st.metric("TraditionalRenting Cost", 
+    delta_renting = comparison_values['rent_to_own_cost'] - comparison_values['renting_cost']
+    st.metric("Traditional Renting Cost", 
               f"${comparison_values['renting_cost']:,.0f}", 
-              delta=f"${delta_renting:,.0f}",
+              delta=f"{'-' if delta_renting > 0 else ''}${abs(delta_renting):,.0f}",
               delta_color="inverse")
-
-add_vertical_space(1)
-
-# Create DataFrame for detailed comparison
-df = pd.DataFrame(comparison_data)
 
 # Define column configuration for better display
 column_config = {
@@ -377,7 +420,7 @@ with st.expander("🔍 See the full comparison table"):
 
     # Add glossary of terms
     st.markdown("""
-    #### Glossary of Terms
+    ##### Glossary of Terms
     - **Initial purchase price**: The original cost of the home.
     - **Down payment**: The initial upfront payment made when purchasing a home.
     - **Interest rate**: The annual cost of borrowing the money, expressed as a percentage.
@@ -386,8 +429,9 @@ with st.expander("🔍 See the full comparison table"):
     - **Total equity**: The total value of your ownership stake in the property.
     - **Total spent**: The total amount of money paid over the selected time period.
     - **Down payment opportunity cost**: The potential earnings lost by using money for a down payment instead of investing it.
+    - **Tax savings (mortgage interest)**: The amount saved on taxes due to the mortgage interest deduction.
     - **Total true cost**: The net cost after considering all expenses, equity gained, and opportunity costs.
     """)
 
 # Add caption explaining assumptions
-st.caption(f"This looks at all the money you'll be spending on a house minus your gained equity and appreciation. We're assuming a mortgage rate of {comparison_values['current_mortgage_rate']:.2%}, an average appreciation rate of {appreciation_rate:.1%}, a {property_tax_rate:.2%} annual property tax rate, a {DOWN_PAYMENT_RATIO:.0%} down payment, and a price-to-rent ratio of {price_to_rent_ratio}.")
+st.caption(f"This looks at all the money you'll be spending on a house minus your gained equity and appreciation. We're assuming a mortgage rate of {comparison_values['current_mortgage_rate']:.2%}, an average appreciation rate of {appreciation_rate:.1%}, a {property_tax_rate:.2%} annual property tax rate, a {DOWN_PAYMENT_RATIO:.0%} down payment, a price-to-rent ratio of {price_to_rent_ratio}, and a marginal tax rate of {marginal_tax_rate:.1%}.")
