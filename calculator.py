@@ -75,15 +75,16 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
     # Create pie chart
     labels = list(breakdown.keys())
     values = list(breakdown.values())
+
     fig = go.Figure(data=[go.Pie(
         labels=labels, 
         values=values, 
         hole=.5, 
         textinfo='label+value',
-        texttemplate='%{label}<br>$%{value:,.2f}',
+        texttemplate='%{label}<br>$%{value:,.2f}',  # Updated format
         name='',
         hoverinfo='none',
-        textfont=dict(size=14)
+        textfont=dict(size=14)  # Increase the font size here
     )])
     fig.update_layout(
         showlegend=False,
@@ -91,8 +92,10 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
         margin=dict(l=0, r=0, t=0, b=0),
         title_text=''
     )
+
+    # Add total monthly rent to the center of the pie chart
     fig.add_annotation(
-        text=f"<b>${monthly_rent:,.2f}</b>/mo",
+        text=f"<b>${monthly_rent:,.2f}</b>/mo",  # Updated format
         x=0.5,
         y=0.5,
         font_size=24,
@@ -100,7 +103,7 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
         font=dict(color="black")
     )
             
-    return None, house_price, loan_amount, monthly_rent
+    return fig, house_price, loan_amount, monthly_rent
 
 def calculate_estimated_equity(house_price, appreciation_rate, years):
     future_value = house_price * (1 + appreciation_rate) ** years
@@ -120,16 +123,47 @@ def calculate_equity_breakdown(house_price, loan_amount, interest_rate, loan_ter
     
     return total_principal, renter_share_appreciation
 
-# @st.cache_data(ttl=604800)  # Cache for 1 week
-# def create_equity_pie_chart(total_principal, renter_share_appreciation):
-#     # Commented out due to plotly dependency
+@st.cache_data(ttl=604800)  # Cache for 1 week
+def create_equity_pie_chart(total_principal, renter_share_appreciation):
+    labels = ['Principal', 'Appreciation']
+    values = [total_principal, renter_share_appreciation]
+    colors = ['#1E3A8A', '#3B82F6']  # Two shades of blue
+
+    fig = go.Figure(data=[go.Pie(
+        labels=labels, 
+        values=values, 
+        hole=.5, 
+        textinfo='label+value',
+        texttemplate='%{label}<br>$%{value:,.2f}',  # Updated format
+        name='',
+        hoverinfo='none',
+        textfont=dict(size=14),
+        marker=dict(colors=colors)
+    )])
+    fig.update_layout(
+        showlegend=False,
+        autosize=True,
+        margin=dict(l=0, r=0, t=0, b=0),
+        title_text=''
+    )
+
+    total_equity = total_principal + renter_share_appreciation
+    fig.add_annotation(
+        text=f"<b>${total_equity:,.2f}</b>",  # Updated format
+        x=0.5,
+        y=0.5,
+        font_size=32,
+        showarrow=False,
+        font=dict(color="black")
+    )
+            
+    return fig
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
 def calculate_comparison_values(house_price, property_tax_rate, appreciation_rate, years, monthly_rent, total_equity, down_payment_ratio, price_to_rent_ratio, investment_return_rate):
     current_mortgage_rate = get_current_mortgage_rate()
     traditional_loan = house_price * (1 - down_payment_ratio)
     mortgage_payment = npf.pmt(current_mortgage_rate/12, LOAN_TERM_YEARS*12, -traditional_loan)
-    mortgage_payment = 0  # Placeholder value
     monthly_insurance = INSURANCE_FIXED
     monthly_property_tax = (house_price * property_tax_rate) / 12
     traditional_payment = mortgage_payment + monthly_insurance + monthly_property_tax
@@ -185,6 +219,7 @@ with st.sidebar:
 st.title("Rent-to-Own Calculator")
 st.write("This tool enables you to determine the equity you will own in your home over time, calculate monthly mortgage payments, and gives a great comparison between buying and renting a place.")
 
+# col1, col2 = st.columns(2)
 # Basic price input
 house_price = st.number_input("Enter the price of the home you are considering:", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
 
@@ -199,12 +234,13 @@ if house_price:
     st.write("Unlike typical rent, rent to own applies a portion of your rent towards the purchase of the home. The rest is used to pay for the loan, property taxes, insurance, and maintenance.")
 
     add_vertical_space(2)
-    # st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, 
+    use_container_width=True)
 
     add_vertical_space(3)
     st.divider()
     add_vertical_space(1)
-#
+
     # Equity calculation section
     st.header("How much equity can you build in your home over time?")
     st.write("In addition to a portion of your rent going towards the purchase of the home, you will also share in 50% of the appreciation of the home as it goes up in value.")
@@ -216,14 +252,14 @@ if house_price:
 
     # Calculate and display equity breakdown
     total_principal, renter_share_appreciation = calculate_equity_breakdown(house_price, loan_amount, 0.035, LOAN_TERM_YEARS, appreciation_rate, years)
-    # equity_fig = create_equity_pie_chart(total_principal, renter_share_appreciation)
+    equity_fig = create_equity_pie_chart(total_principal, renter_share_appreciation)
 
     total_equity = total_principal + renter_share_appreciation
     st.subheader(f"You would build an estimated :blue[${total_equity:,.2f}] in equity.")
     st.write("This is assuming a 3.5% annual appreciation, which will depend on the local market.")
 
     add_vertical_space(1)
-    # st.plotly_chart(equity_fig, use_container_width=True)
+    st.plotly_chart(equity_fig, use_container_width=True)
     add_vertical_space(1)
 
     # Comparison of different scenarios
@@ -268,25 +304,24 @@ if house_price:
         st.metric("Renting Cost", f"${comparison_values['renting_cost']:,.0f}")
 
     # Create DataFrame for detailed comparison
-    # df = pd.DataFrame(comparison_data)
+    df = pd.DataFrame(comparison_data)
     
     # Define column configuration for better display
-    # column_config = {
-    #     "Metric": st.column_config.TextColumn("Metric", width="medium"),
-    #     "Rent to Own": st.column_config.NumberColumn("Rent to Own", width="small"),
-    #     "Traditional Mortgage": st.column_config.NumberColumn("Traditional Mortgage", width="small"),
-    #     "Renting": st.column_config.NumberColumn("Renting", width="small")
-    # }
+    column_config = {
+        "Metric": st.column_config.TextColumn("Metric", width="medium"),
+        "Rent to Own": st.column_config.NumberColumn("Rent to Own", width="small"),
+        "Traditional Mortgage": st.column_config.NumberColumn("Traditional Mortgage", width="small"),
+        "Renting": st.column_config.NumberColumn("Renting", width="small")
+    }
 
     # Display detailed comparison table in an expandable section
     with st.expander("🔍 See the full comparison table"):
-        # st.dataframe(
-        #     df.style.set_properties(**{'text-align': 'right'}, subset=df.columns[1:]),
-        #     column_config=column_config,
-        #     hide_index=True,
-        #     use_container_width=True
-        # )
-        st.write("Detailed comparison table is currently unavailable.")
+        st.dataframe(
+            df.style.set_properties(**{'text-align': 'right'}, subset=df.columns[1:]),
+            column_config=column_config,
+            hide_index=True,
+            use_container_width=True
+        )
     
     # Add caption explaining assumptions
     st.caption(f"This looks at all the money you'll be spending on a house minus your gained equity and appreciation. We're assuming a mortgage rate of {comparison_values['current_mortgage_rate']:.2%}, an average appreciation rate of {appreciation_rate:.1%}, a {property_tax_rate:.2%} annual property tax rate, a {DOWN_PAYMENT_RATIO:.0%} down payment, and a price-to-rent ratio of {price_to_rent_ratio}.")
