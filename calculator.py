@@ -1,5 +1,5 @@
 import streamlit as st
-# import plotly.graph_objects as go
+import plotly.graph_objects as go
 import pandas as pd
 from streamlit_extras.add_vertical_space import add_vertical_space
 import numpy_financial as npf
@@ -73,33 +73,33 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
     breakdown['Interest'] = interest
     
     # Create pie chart
-    # Commented out due to plotly dependency
-    # labels = list(breakdown.keys())
-    # values = list(breakdown.values())
-    # fig = go.Figure(data=[go.Pie(
-    #     labels=labels, 
-    #     values=values, 
-    #     hole=.5, 
-    #     textinfo='label+value',
-    #     texttemplate='%{label}<br>$%{value:,.2f}',
-    #     name='',
-    #     hoverinfo='none',
-    #     textfont=dict(size=14)
-    # )])
-    # fig.update_layout(
-    #     showlegend=False,
-    #     autosize=True,
-    #     margin=dict(l=0, r=0, t=0, b=0),
-    #     title_text=''
-    # )
-    # fig.add_annotation(
-    #     text=f"<b>${monthly_rent:,.2f}</b>/mo",
-    #     x=0.5,
-    #     y=0.5,
-    #     font_size=24,
-    #     showarrow=False,
-    #     font=dict(color="black")
-    # )
+    Commented out due to plotly dependency
+    labels = list(breakdown.keys())
+    values = list(breakdown.values())
+    fig = go.Figure(data=[go.Pie(
+        labels=labels, 
+        values=values, 
+        hole=.5, 
+        textinfo='label+value',
+        texttemplate='%{label}<br>$%{value:,.2f}',
+        name='',
+        hoverinfo='none',
+        textfont=dict(size=14)
+    )])
+    fig.update_layout(
+        showlegend=False,
+        autosize=True,
+        margin=dict(l=0, r=0, t=0, b=0),
+        title_text=''
+    )
+    fig.add_annotation(
+        text=f"<b>${monthly_rent:,.2f}</b>/mo",
+        x=0.5,
+        y=0.5,
+        font_size=24,
+        showarrow=False,
+        font=dict(color="black")
+    )
             
     return None, house_price, loan_amount, monthly_rent
 
