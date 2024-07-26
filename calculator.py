@@ -2,7 +2,7 @@ import streamlit as st
 # import plotly.graph_objects as go
 # import pandas as pd
 # from streamlit_extras.add_vertical_space import add_vertical_space
-# import numpy_financial as npf
+import numpy_financial as npf
 import requests
 
 # Define constants at the top of the file
@@ -130,7 +130,7 @@ def calculate_comparison_values(house_price, property_tax_rate, appreciation_rat
     # current_mortgage_rate = get_current_mortgage_rate()
     current_mortgage_rate = 0.05  # Placeholder value
     traditional_loan = house_price * (1 - down_payment_ratio)
-    # mortgage_payment = npf.pmt(current_mortgage_rate/12, LOAN_TERM_YEARS*12, -traditional_loan)
+    mortgage_payment = npf.pmt(current_mortgage_rate/12, LOAN_TERM_YEARS*12, -traditional_loan)
     mortgage_payment = 0  # Placeholder value
     monthly_insurance = INSURANCE_FIXED
     monthly_property_tax = (house_price * property_tax_rate) / 12
