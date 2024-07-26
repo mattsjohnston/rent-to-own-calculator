@@ -249,7 +249,7 @@ with st.sidebar:
         closing_costs_rate = st.number_input("Closing Costs (%)", min_value=0.0, max_value=10.0, value=3.0, step=0.1) / 100
         property_tax_rate = st.number_input("Property Tax Rate (%)", min_value=0.0, max_value=5.0, value=1.122, step=0.001) / 100
         investment_return_rate = st.number_input("Investment Return Rate (%)", min_value=0.0, max_value=20.0, value=5.0, step=0.1, help="The rate of return you expect to earn in an investment account. This is used to calculate the opportunity cost of the down payment if you were to invest it instead of using it for a traditional mortgage.") / 100
-        price_to_rent_ratio = st.number_input("Price-to-Rent Ratio", min_value=1.0, max_value=50.0, value=19.0, step=0.1, help="The ratio of the price of the home to the rent of a similar home. This is used to calculate the monthly rent of an equivalent home for comparison purposes.")
+        price_to_rent_ratio = st.number_input("Price-to-Rent Ratio", min_value=1, max_value=50, value=19, step=1, help="The ratio of the price of the home to the rent of a similar home. This is used to calculate the monthly rent of an equivalent home for comparison purposes.")
 
 # Set up the main title and description
 st.title("Rent-to-Own Calculator")
@@ -303,7 +303,7 @@ st.plotly_chart(equity_fig, use_container_width=True)
 add_vertical_space(1)
 
 # Comparison of different scenarios
-st.markdown(f"#### What's the total cost of each scenario after :blue[{years}] years?")
+st.markdown(f"#### After :blue[{years}] years, how does the cost compare to renting?")
 
 # Calculate comparison values
 comparison_values = calculate_comparison_values(
@@ -337,11 +337,23 @@ comparison_data = {
 # Display total cost metrics for each scenario
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Renting Cost", f"${comparison_values['renting_cost']:,.0f}")
+    delta_rent_to_own = comparison_values['rent_to_own_cost'] - comparison_values['rent_to_own_cost']
+    st.metric("Rent to Own Cost", 
+              f"${comparison_values['rent_to_own_cost']:,.0f}")
 with col2:
-    st.metric("Traditional Mortgage Cost", f"${comparison_values['traditional_cost']:,.0f}")
+    delta_traditional = comparison_values['traditional_cost'] - comparison_values['rent_to_own_cost']
+    st.metric("Traditional Mortgage Cost", 
+              f"${comparison_values['traditional_cost']:,.0f}", 
+              delta=f"${delta_traditional:,.0f}",
+              delta_color="inverse")
 with col3:
-    st.metric("Rent to Own Cost", f"${comparison_values['rent_to_own_cost']:,.0f}")
+    delta_renting = comparison_values['renting_cost'] - comparison_values['rent_to_own_cost']
+    st.metric("TraditionalRenting Cost", 
+              f"${comparison_values['renting_cost']:,.0f}", 
+              delta=f"${delta_renting:,.0f}",
+              delta_color="inverse")
+
+add_vertical_space(1)
 
 # Create DataFrame for detailed comparison
 df = pd.DataFrame(comparison_data)
@@ -362,6 +374,20 @@ with st.expander("🔍 See the full comparison table"):
         hide_index=True,
         use_container_width=True
     )
+
+    # Add glossary of terms
+    st.markdown("""
+    #### Glossary of Terms
+    - **Initial purchase price**: The original cost of the home.
+    - **Down payment**: The initial upfront payment made when purchasing a home.
+    - **Interest rate**: The annual cost of borrowing the money, expressed as a percentage.
+    - **Appreciation share**: The percentage of the home's increase in value that you benefit from.
+    - **Monthly payment**: The amount paid each month for housing costs.
+    - **Total equity**: The total value of your ownership stake in the property.
+    - **Total spent**: The total amount of money paid over the selected time period.
+    - **Down payment opportunity cost**: The potential earnings lost by using money for a down payment instead of investing it.
+    - **Total true cost**: The net cost after considering all expenses, equity gained, and opportunity costs.
+    """)
 
 # Add caption explaining assumptions
 st.caption(f"This looks at all the money you'll be spending on a house minus your gained equity and appreciation. We're assuming a mortgage rate of {comparison_values['current_mortgage_rate']:.2%}, an average appreciation rate of {appreciation_rate:.1%}, a {property_tax_rate:.2%} annual property tax rate, a {DOWN_PAYMENT_RATIO:.0%} down payment, and a price-to-rent ratio of {price_to_rent_ratio}.")
