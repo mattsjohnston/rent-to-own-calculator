@@ -3,7 +3,7 @@ import streamlit as st
 # import pandas as pd
 # from streamlit_extras.add_vertical_space import add_vertical_space
 # import numpy_financial as npf
-# import requests
+import requests
 
 # Define constants at the top of the file
 DOWN_PAYMENT_RATIO = 0.2
@@ -11,12 +11,12 @@ INSURANCE_FIXED = 120
 MANAGEMENT_FEE_RATE = 0.08
 LOAN_TERM_YEARS = 30
 
-# @st.cache_data(ttl=3600)  # Cache for 1 hour
-# def get_current_mortgage_rate():
-#     url = "https://api.stlouisfed.org/fred/series/observations?series_id=MORTGAGE30US&api_key=2ff2780e16de4ae8c876b130dc9981fe&file_type=json&limit=1&sort_order=desc"
-#     response = requests.get(url)
-#     data = response.json()
-#     return float(data['observations'][0]['value']) / 100
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def get_current_mortgage_rate():
+    url = "https://api.stlouisfed.org/fred/series/observations?series_id=MORTGAGE30US&api_key=2ff2780e16de4ae8c876b130dc9981fe&file_type=json&limit=1&sort_order=desc"
+    response = requests.get(url)
+    data = response.json()
+    return float(data['observations'][0]['value']) / 100
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
 def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate):
