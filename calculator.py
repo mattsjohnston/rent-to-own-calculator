@@ -127,7 +127,6 @@ def calculate_equity_breakdown(house_price, loan_amount, interest_rate, loan_ter
 def create_equity_pie_chart(total_principal, renter_share_appreciation):
     labels = ['Principal', 'Appreciation']
     values = [total_principal, renter_share_appreciation]
-    colors = ['#1E3A8A', '#3B82F6']  # Two shades of blue
 
     fig = go.Figure(data=[go.Pie(
         labels=labels, 
@@ -137,8 +136,7 @@ def create_equity_pie_chart(total_principal, renter_share_appreciation):
         texttemplate='%{label}<br>$%{value:,.2f}',  # Updated format
         name='',
         hoverinfo='none',
-        textfont=dict(size=14),
-        marker=dict(colors=colors)
+        textfont=dict(size=14)
     )])
     fig.update_layout(
         showlegend=False,
@@ -152,7 +150,7 @@ def create_equity_pie_chart(total_principal, renter_share_appreciation):
         text=f"<b>${total_equity:,.2f}</b>",  # Updated format
         x=0.5,
         y=0.5,
-        font_size=32,
+        font_size=24,
         showarrow=False,
         font=dict(color="black")
     )
