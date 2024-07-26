@@ -1,7 +1,7 @@
 import streamlit as st
 # import plotly.graph_objects as go
 # import pandas as pd
-# from streamlit_extras.add_vertical_space import add_vertical_space
+from streamlit_extras.add_vertical_space import add_vertical_space
 import numpy_financial as npf
 import requests
 
@@ -190,7 +190,7 @@ st.write("This tool enables you to determine the equity you will own in your hom
 # Basic price input
 house_price = st.number_input("Enter the price of the home you are considering:", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
 
-# add_vertical_space(1)
+add_vertical_space(1)
 
 # Main area calculations and displays
 if house_price:
@@ -200,18 +200,18 @@ if house_price:
     st.subheader(f"Your monthly rent would be :blue[${monthly_rent:,.2f}].")
     st.write("Unlike typical rent, rent to own applies a portion of your rent towards the purchase of the home. The rest is used to pay for the loan, property taxes, insurance, and maintenance.")
 
-    # add_vertical_space(2)
+    add_vertical_space(2)
     # st.plotly_chart(fig, use_container_width=True)
 
-    # add_vertical_space(3)
+    add_vertical_space(3)
     st.divider()
-    # add_vertical_space(1)
-
+    add_vertical_space(1)
+#
     # Equity calculation section
     st.header("How much equity can you build in your home over time?")
     st.write("In addition to a portion of your rent going towards the purchase of the home, you will also share in 50% of the appreciation of the home as it goes up in value.")
 
-    # add_vertical_space(1)
+    add_vertical_space(1)
 
     # User input for years of renting
     years = st.slider("Select the number of years you plan to rent the home.", min_value=1, max_value=7, value=4, step=1)
@@ -224,9 +224,9 @@ if house_price:
     st.subheader(f"You would build an estimated :blue[${total_equity:,.2f}] in equity.")
     st.write("This is assuming a 3.5% annual appreciation, which will depend on the local market.")
 
-    # add_vertical_space(1)
+    add_vertical_space(1)
     # st.plotly_chart(equity_fig, use_container_width=True)
-    # add_vertical_space(1)
+    add_vertical_space(1)
 
     # Comparison of different scenarios
     st.markdown(f"#### What's the total cost of each scenario after :blue[{years}] years?")
