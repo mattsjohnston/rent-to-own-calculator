@@ -73,7 +73,6 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
     breakdown['Interest'] = interest
     
     # Create pie chart
-    Commented out due to plotly dependency
     labels = list(breakdown.keys())
     values = list(breakdown.values())
     fig = go.Figure(data=[go.Pie(
