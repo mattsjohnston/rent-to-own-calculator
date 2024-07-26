@@ -205,24 +205,28 @@ def calculate_comparison_values(house_price, property_tax_rate, appreciation_rat
     }
 
 def main():
-    # Set up the main title and description
-    st.title("Rent-to-Own Calculator")
-    st.write("This tool enables you to determine the equity you will own in your home over time, calculate monthly mortgage payments, and gives a great comparison between buying and renting a place.")
-    add_vertical_space(2)
-
     # Sidebar inputs
     with st.sidebar:
-        st.subheader("Property Details")
-        # Basic inputs
-        house_price = st.number_input("House Price", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
-        appreciation_rate = st.number_input("Annual Appreciation Rate (%)", min_value=0.0, max_value=10.0, value=3.5, step=0.1) / 100
-
+        st.markdown("#### Advanced Settings")
+        st.write("These settings are optional and can be adjusted to see how they impact the results.")
         # Advanced settings in an expandable section
         with st.expander("Advanced Settings"):
+            appreciation_rate = st.number_input("Annual Appreciation Rate (%)", min_value=0.0, max_value=10.0, value=3.5, step=0.1) / 100
             closing_costs_rate = st.number_input("Closing Costs (%)", min_value=0.0, max_value=10.0, value=3.0, step=0.1) / 100
             property_tax_rate = st.number_input("Property Tax Rate (%)", min_value=0.0, max_value=5.0, value=1.122, step=0.001) / 100
             investment_return_rate = st.number_input("Investment Return Rate (%)", min_value=0.0, max_value=20.0, value=5.0, step=0.1, help="The rate of return you expect to earn in an investment account. This is used to calculate the opportunity cost of the down payment if you were to invest it instead of using it for a traditional mortgage.") / 100
             price_to_rent_ratio = st.number_input("Price-to-Rent Ratio", min_value=1.0, max_value=50.0, value=19.0, step=0.1, help="The ratio of the price of the home to the rent of a similar home. This is used to calculate the monthly rent of an equivalent home for comparison purposes.")
+
+    # Set up the main title and description
+    st.title("Rent-to-Own Calculator")
+    st.write("This tool enables you to determine the equity you will own in your home over time, calculate monthly mortgage payments, and gives a great comparison between buying and renting a place.")
+
+    col1, col2 = st.columns(2)
+
+    # Basic price input
+    house_price = col1.number_input("Enter the price of the home you are considering:", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
+
+    add_vertical_space(1)
 
     # Main area calculations and displays
     if house_price:
