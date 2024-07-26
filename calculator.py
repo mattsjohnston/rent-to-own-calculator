@@ -89,16 +89,29 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
     # Create pie chart
     labels = list(breakdown.keys())
     values = list(breakdown.values())
+    
+    # Define custom colors
+    custom_colors = ['#0068C9', '#83C5BE', '#EDF6F9', '#FFDDD2', '#E29578']
+
+    hover_text = [
+        "Monthly amount going towards paying off the loan principal.<br>If you decide to buy the house, this amount will be credited towards your purchase.",
+        "Monthly financing cost, calculated based on a 3.5% annual rate.<br>This represents the cost of the rent-to-own arrangement.",
+        "Monthly homeowner's insurance cost",
+        "Monthly property tax based on the home's value",
+        "Monthly fee for property management services"
+    ]
 
     fig = go.Figure(data=[go.Pie(
         labels=labels, 
         values=values, 
         hole=.5, 
         textinfo='label+value',
-        texttemplate='%{label}<br>$%{value:,.2f}',  # Updated format
-        name='',
-        hoverinfo='none',
-        textfont=dict(size=14)  # Increase the font size here
+        texttemplate='%{label}<br>$%{value:,.2f}',
+        hovertext=hover_text,
+        hoverinfo='text',
+        hoverlabel_align='left',
+        textfont=dict(size=14),
+        marker=dict(colors=custom_colors)  # Add this line to use custom colors
     )])
     fig.update_layout(
         showlegend=False,
@@ -141,17 +154,28 @@ def calculate_equity_breakdown(house_price, loan_amount, interest_rate, loan_ter
 def create_equity_pie_chart(total_principal, renter_share_appreciation):
     labels = ['Principal', 'Appreciation']
     values = [total_principal, renter_share_appreciation]
+    hover_text = [
+        "Monthly amount going towards paying off the loan principal.<br>If you decide to buy the house, this amount will be credited towards your purchase.",
+        "Your share (50%) of the home's appreciation in value over the selected period.<br>When you decide to buy the house, we'll get it re-appraised.<br>If there's any increase in value since the original purchase date,<br>half of that appreciation will be credited towards your purchase of the home."
+    ]
+    custom_colors = ['#0068c9', '#003B72']
 
     fig = go.Figure(data=[go.Pie(
-        labels=labels, 
-        values=values, 
-        hole=.5, 
+        labels=labels,
+        values=values,
+        hole=.5,
         textinfo='label+value',
-        texttemplate='%{label}<br>$%{value:,.2f}',  # Updated format
-        name='',
-        hoverinfo='none',
-        textfont=dict(size=14)
+        texttemplate='%{label}<br>$%{value:,.2f}',
+        hovertext=hover_text,
+        hoverinfo='text',
+        hoverlabel_align='left',
+        textfont=dict(size=14),
+        marker=dict(colors=custom_colors),
+        sort=False,
+        direction='clockwise',
+        rotation=180  # Start at 9 o'clock position
     )])
+
     fig.update_layout(
         showlegend=False,
         autosize=True,
@@ -161,7 +185,7 @@ def create_equity_pie_chart(total_principal, renter_share_appreciation):
 
     total_equity = total_principal + renter_share_appreciation
     fig.add_annotation(
-        text=f"<b>${total_equity:,.2f}</b>",  # Updated format
+        text=f"<b>${total_equity:,.2f}</b>",
         x=0.5,
         y=0.5,
         font_size=24,
@@ -313,11 +337,11 @@ comparison_data = {
 # Display total cost metrics for each scenario
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Rent to Own Cost", f"${comparison_values['rent_to_own_cost']:,.0f}")
+    st.metric("Renting Cost", f"${comparison_values['renting_cost']:,.0f}")
 with col2:
     st.metric("Traditional Mortgage Cost", f"${comparison_values['traditional_cost']:,.0f}")
 with col3:
-    st.metric("Renting Cost", f"${comparison_values['renting_cost']:,.0f}")
+    st.metric("Rent to Own Cost", f"${comparison_values['rent_to_own_cost']:,.0f}")
 
 # Create DataFrame for detailed comparison
 df = pd.DataFrame(comparison_data)
@@ -326,7 +350,7 @@ df = pd.DataFrame(comparison_data)
 column_config = {
     "Metric": st.column_config.TextColumn("Metric", width="medium"),
     "Rent to Own": st.column_config.NumberColumn("Rent to Own", width="small"),
-    "Traditional Mortgage": st.column_config.NumberColumn("Traditional Mortgage", width="small"),
+    "Traditional Mortgage": st.column_config.NumberColumn("Mortgage", width="small"),
     "Renting": st.column_config.NumberColumn("Renting", width="small")
 }
 
