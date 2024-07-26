@@ -1,9 +1,4 @@
 import streamlit as st
-import plotly.graph_objects as go
-import pandas as pd
-from streamlit_extras.add_vertical_space import add_vertical_space
-import numpy_financial as npf
-import requests
 
 def main():
     # Set up the main title and description
