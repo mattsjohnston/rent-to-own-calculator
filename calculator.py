@@ -99,7 +99,7 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
         text=f"<b>${monthly_rent:,.2f}</b>/mo",  # Updated format
         x=0.5,
         y=0.5,
-        font_size=32,  # Increased from 28 to 32
+        font_size=24,
         showarrow=False,
         font=dict(color="black")
     )
