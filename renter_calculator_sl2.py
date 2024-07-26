@@ -250,15 +250,15 @@ def main():
         years = st.slider("Select the number of years you plan to rent the home.", min_value=1, max_value=7, value=4, step=1)
 
         # Calculate and display equity breakdown
-        total_principal, renter_share_appreciation = calculate_equity_breakdown(house_price, loan_amount, 0.035, LOAN_TERM_YEARS, appreciation_rate, years)
-        equity_fig = create_equity_pie_chart(total_principal, renter_share_appreciation)
+        # total_principal, renter_share_appreciation = calculate_equity_breakdown(house_price, loan_amount, 0.035, LOAN_TERM_YEARS, appreciation_rate, years)
+        # equity_fig = create_equity_pie_chart(total_principal, renter_share_appreciation)
 
-        total_equity = total_principal + renter_share_appreciation
+        total_equity = 0  # Temporary placeholder
         st.subheader(f"You would build an estimated :blue[${total_equity:,.2f}] in equity.")
         st.write("This is assuming a 3.5% annual appreciation, which will depend on the local market.")
 
         add_vertical_space(1)
-        st.plotly_chart(equity_fig, use_container_width=True)
+        # st.plotly_chart(equity_fig, use_container_width=True)
         add_vertical_space(1)
 
         # Comparison of different scenarios
