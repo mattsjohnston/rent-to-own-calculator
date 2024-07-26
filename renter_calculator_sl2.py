@@ -1,5 +1,4 @@
 import streamlit as st
-import numpy as np
 import plotly.graph_objects as go
 import pandas as pd
 from streamlit_extras.add_vertical_space import add_vertical_space

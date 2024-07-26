@@ -1,7 +1,6 @@
 streamlit
-streamlit_extras
-plotly
-numpy-financial
-numpy
-pandas
-requests
+streamlit-extras==0.4.3
+plotly==5.23.0
+numpy-financial==1.0.0
+pandas==2.2.2
+requests==2.32.3
