@@ -75,7 +75,6 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
     # Create pie chart
     labels = list(breakdown.keys())
     values = list(breakdown.values())
-    colors = ['#1E3A8A', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD']  # Shades of blue
 
     fig = go.Figure(data=[go.Pie(
         labels=labels, 
@@ -221,10 +220,9 @@ def main():
     st.title("Rent-to-Own Calculator")
     st.write("This tool enables you to determine the equity you will own in your home over time, calculate monthly mortgage payments, and gives a great comparison between buying and renting a place.")
 
-    col1, col2 = st.columns(2)
-
+    # col1, col2 = st.columns(2)
     # Basic price input
-    house_price = col1.number_input("Enter the price of the home you are considering:", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
+    house_price = st.number_input("Enter the price of the home you are considering:", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
 
     add_vertical_space(1)
 
