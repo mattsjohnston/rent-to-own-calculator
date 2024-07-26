@@ -10,6 +10,7 @@ DOWN_PAYMENT_RATIO = 0.2
 INSURANCE_FIXED = 120
 MANAGEMENT_FEE_RATE = 0.08
 LOAN_TERM_YEARS = 30
+DEFAULT_YEARS = 4  # New constant for default years
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_current_mortgage_rate():
@@ -48,29 +49,42 @@ def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, ap
     
     return house_price, monthly_rent, breakdown, interest_rate, LOAN_TERM_YEARS
 
-def calculate_monthly_breakdown(house_price, interest_rate, loan_term_years, month):
+def calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month):
     monthly_rate = interest_rate / 12
     num_payments = loan_term_years * 12
-    monthly_payment = house_price * (monthly_rate * (1 + monthly_rate)**num_payments) / ((1 + monthly_rate)**num_payments - 1)
     
-    remaining_balance = house_price * ((1 + monthly_rate)**num_payments - (1 + monthly_rate)**month) / ((1 + monthly_rate)**num_payments - 1)
+    # Calculate the monthly payment using numpy financial
+    monthly_payment = -npf.pmt(monthly_rate, num_payments, loan_amount)
+    
+    # Calculate the remaining balance
+    remaining_balance = npf.fv(monthly_rate, month - 1, monthly_payment, -loan_amount)
+    
+    # Calculate interest and principal for the specific month
     interest = remaining_balance * monthly_rate
     principal = monthly_payment - interest
     
     return principal, interest
 
-def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate):
+def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years):
     house_price, monthly_rent, breakdown, interest_rate, loan_term_years = calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate)
     
     # Calculate loan amount
     loan_amount = house_price * (1 + closing_costs_rate)
     
-    # Calculate principal and interest for the first month
-    principal, interest = calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, 1)
+    # Calculate average principal and interest over the specified years
+    total_principal = 0
+    total_interest = 0
+    for month in range(1, years * 12 + 1):
+        principal, interest = calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month)
+        total_principal += principal
+        total_interest += interest
     
-    # Update breakdown with new principal and interest values
-    breakdown['Principal'] = principal
-    breakdown['Interest'] = interest
+    avg_principal = total_principal / (years * 12)
+    avg_interest = total_interest / (years * 12)
+    
+    # Update breakdown with new average principal and interest values
+    breakdown['Principal'] = avg_principal
+    breakdown['Interest'] = avg_interest
     
     # Create pie chart
     labels = list(breakdown.keys())
@@ -217,109 +231,113 @@ with st.sidebar:
 st.title("Rent-to-Own Calculator")
 st.write("This tool enables you to determine the equity you will own in your home over time, calculate monthly mortgage payments, and gives a great comparison between buying and renting a place.")
 
-# col1, col2 = st.columns(2)
 # Basic price input
-house_price = st.number_input("Enter the price of the home you are considering:", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
+col1, col2 = st.columns(2)
+house_price = col1.number_input("Enter the price of the home you are considering:", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
 
 add_vertical_space(1)
 
-# Main area calculations and displays
-if house_price:
-    # Calculate and display monthly rent breakdown
-    fig, house_price, loan_amount, monthly_rent = update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate)
+st.subheader("Monthly Rent Breakdown")
+st.write("Unlike typical rent, rent to own applies a portion of your rent towards the purchase of the home. The rest is used to pay for the loan, property taxes, insurance, and maintenance.")
 
-    st.subheader(f"Your monthly rent would be :blue[${monthly_rent:,.2f}].")
-    st.write("Unlike typical rent, rent to own applies a portion of your rent towards the purchase of the home. The rest is used to pay for the loan, property taxes, insurance, and maintenance.")
+add_vertical_space(1)
 
-    add_vertical_space(2)
-    st.plotly_chart(fig, 
-    use_container_width=True)
+subheader_slot = st.empty()
+add_vertical_space(1)
+plot_slot = st.empty()
+plot_slot.container(height=300)
 
-    add_vertical_space(3)
-    st.divider()
-    add_vertical_space(1)
+add_vertical_space(2)
+st.divider()
+add_vertical_space(1)
 
-    # Equity calculation section
-    st.header("How much equity can you build in your home over time?")
-    st.write("In addition to a portion of your rent going towards the purchase of the home, you will also share in 50% of the appreciation of the home as it goes up in value.")
+# Equity calculation section
+st.header("How much equity can you build in your home over time?")
+st.write("In addition to a portion of your rent going towards the purchase of the home, you will also share in 50% of the appreciation of the home as it goes up in value.")
 
-    add_vertical_space(1)
+add_vertical_space(1)
 
-    # User input for years of renting
-    years = st.slider("Select the number of years you plan to rent the home.", min_value=1, max_value=7, value=4, step=1)
+# User input for years of renting
+years = st.slider("Select the number of years you plan to rent the home.", min_value=1, max_value=7, value=DEFAULT_YEARS, step=1)
 
-    # Calculate and display equity breakdown
-    total_principal, renter_share_appreciation = calculate_equity_breakdown(house_price, loan_amount, 0.035, LOAN_TERM_YEARS, appreciation_rate, years)
-    equity_fig = create_equity_pie_chart(total_principal, renter_share_appreciation)
+# Calculate initial values with default years
+fig, house_price, loan_amount, monthly_rent = update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years)
 
-    total_equity = total_principal + renter_share_appreciation
-    st.subheader(f"You would build an estimated :blue[${total_equity:,.2f}] in equity.")
-    st.write("This is assuming a 3.5% annual appreciation, which will depend on the local market.")
+subheader_slot.subheader(f"Your monthly rent would be :blue[${monthly_rent:,.2f}].")
+plot_slot.plotly_chart(fig, use_container_width=True)
 
-    add_vertical_space(1)
-    st.plotly_chart(equity_fig, use_container_width=True)
-    add_vertical_space(1)
+# Calculate and display equity breakdown
+total_principal, renter_share_appreciation = calculate_equity_breakdown(house_price, loan_amount, 0.035, LOAN_TERM_YEARS, appreciation_rate, years)
+equity_fig = create_equity_pie_chart(total_principal, renter_share_appreciation)
 
-    # Comparison of different scenarios
-    st.markdown(f"#### What's the total cost of each scenario after :blue[{years}] years?")
-    
-    # Calculate comparison values
-    comparison_values = calculate_comparison_values(
-        house_price, 
-        property_tax_rate, 
-        appreciation_rate, 
-        years, 
-        monthly_rent, 
-        total_equity, 
-        DOWN_PAYMENT_RATIO, 
-        price_to_rent_ratio, 
-        investment_return_rate
+total_equity = total_principal + renter_share_appreciation
+st.subheader(f"You would build an estimated :blue[${total_equity:,.2f}] in equity.")
+st.write("This is assuming a 3.5% annual appreciation, which will depend on the local market.")
+
+add_vertical_space(1)
+st.plotly_chart(equity_fig, use_container_width=True)
+add_vertical_space(1)
+
+# Comparison of different scenarios
+st.markdown(f"#### What's the total cost of each scenario after :blue[{years}] years?")
+
+# Calculate comparison values
+comparison_values = calculate_comparison_values(
+    house_price, 
+    property_tax_rate, 
+    appreciation_rate, 
+    years, 
+    monthly_rent, 
+    total_equity, 
+    DOWN_PAYMENT_RATIO, 
+    price_to_rent_ratio, 
+    investment_return_rate
+)
+
+# Prepare comparison data for display
+comparison_data = {
+    "": ["Initial purchase price", "Down payment", "Interest rate", "Appreciation share", "Monthly payment", 
+            f"Total equity ({years} years)", f"Total spent ({years} years)", 
+            "Down payment opportunity cost", "Total true cost"],
+    "Rent to Own": [f"${house_price:,.0f}", "$0", f"{0.035:.1%}", "50%", f"${monthly_rent:,.0f}", 
+                    f"${total_equity:,.0f}", f"${comparison_values['rent_to_own_spent']:,.0f}", 
+                    "$0", f"${comparison_values['rent_to_own_cost']:,.0f}"],
+    "Traditional Mortgage": [f"${house_price:,.0f}", f"${comparison_values['down_payment']:,.0f}", f"{comparison_values['current_mortgage_rate']:.2%}", "100%", 
+                                f"${comparison_values['traditional_payment']:,.0f}", f"${comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_spent']:,.0f}", 
+                                f"${comparison_values['traditional_cost'] - comparison_values['traditional_spent'] + comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_cost']:,.0f}"],
+    "Renting": ["$0", "$0", "", "0%", f"${comparison_values['rental_payment']:,.0f}", 
+                "$0", f"${comparison_values['renting_spent']:,.0f}", 
+                "$0", f"${comparison_values['renting_cost']:,.0f}"]
+}
+
+# Display total cost metrics for each scenario
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Rent to Own Cost", f"${comparison_values['rent_to_own_cost']:,.0f}")
+with col2:
+    st.metric("Traditional Mortgage Cost", f"${comparison_values['traditional_cost']:,.0f}")
+with col3:
+    st.metric("Renting Cost", f"${comparison_values['renting_cost']:,.0f}")
+
+# Create DataFrame for detailed comparison
+df = pd.DataFrame(comparison_data)
+
+# Define column configuration for better display
+column_config = {
+    "Metric": st.column_config.TextColumn("Metric", width="medium"),
+    "Rent to Own": st.column_config.NumberColumn("Rent to Own", width="small"),
+    "Traditional Mortgage": st.column_config.NumberColumn("Traditional Mortgage", width="small"),
+    "Renting": st.column_config.NumberColumn("Renting", width="small")
+}
+
+# Display detailed comparison table in an expandable section
+with st.expander("🔍 See the full comparison table"):
+    st.dataframe(
+        df.style.set_properties(**{'text-align': 'right'}, subset=df.columns[1:]),
+        column_config=column_config,
+        hide_index=True,
+        use_container_width=True
     )
 
-    # Prepare comparison data for display
-    comparison_data = {
-        "": ["Initial purchase price", "Down payment", "Interest rate", "Appreciation share", "Monthly payment", 
-                f"Total equity ({years} years)", f"Total spent ({years} years)", 
-                "Down payment opportunity cost", "Total true cost"],
-        "Rent to Own": [f"${house_price:,.0f}", "$0", f"{0.035:.1%}", "50%", f"${monthly_rent:,.0f}", 
-                        f"${total_equity:,.0f}", f"${comparison_values['rent_to_own_spent']:,.0f}", 
-                        "$0", f"${comparison_values['rent_to_own_cost']:,.0f}"],
-        "Traditional Mortgage": [f"${house_price:,.0f}", f"${comparison_values['down_payment']:,.0f}", f"{comparison_values['current_mortgage_rate']:.2%}", "100%", 
-                                    f"${comparison_values['traditional_payment']:,.0f}", f"${comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_spent']:,.0f}", 
-                                    f"${comparison_values['traditional_cost'] - comparison_values['traditional_spent'] + comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_cost']:,.0f}"],
-        "Renting": ["$0", "$0", "", "0%", f"${comparison_values['rental_payment']:,.0f}", 
-                    "$0", f"${comparison_values['renting_spent']:,.0f}", 
-                    "$0", f"${comparison_values['renting_cost']:,.0f}"]
-    }
-
-    # Display total cost metrics for each scenario
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Rent to Own Cost", f"${comparison_values['rent_to_own_cost']:,.0f}")
-    with col2:
-        st.metric("Traditional Mortgage Cost", f"${comparison_values['traditional_cost']:,.0f}")
-    with col3:
-        st.metric("Renting Cost", f"${comparison_values['renting_cost']:,.0f}")
-
-    # Create DataFrame for detailed comparison
-    df = pd.DataFrame(comparison_data)
-    
-    # Define column configuration for better display
-    column_config = {
-        "Metric": st.column_config.TextColumn("Metric", width="medium"),
-        "Rent to Own": st.column_config.NumberColumn("Rent to Own", width="small"),
-        "Traditional Mortgage": st.column_config.NumberColumn("Traditional Mortgage", width="small"),
-        "Renting": st.column_config.NumberColumn("Renting", width="small")
-    }
-
-    # Display detailed comparison table in an expandable section
-    with st.expander("🔍 See the full comparison table"):
-        st.dataframe(
-            df.style.set_properties(**{'text-align': 'right'}, subset=df.columns[1:]),
-            column_config=column_config,
-            hide_index=True,
-            use_container_width=True
-        )
-    
-    # Add caption explaining assumptions
-    st.caption(f"This looks at all the money you'll be spending on a house minus your gained equity and appreciation. We're assuming a mortgage rate of {comparison_values['current_mortgage_rate']:.2%}, an average appreciation rate of {appreciation_rate:.1%}, a {property_tax_rate:.2%} annual property tax rate, a {DOWN_PAYMENT_RATIO:.0%} down payment, and a price-to-rent ratio of {price_to_rent_ratio}.")
+# Add caption explaining assumptions
+st.caption(f"This looks at all the money you'll be spending on a house minus your gained equity and appreciation. We're assuming a mortgage rate of {comparison_values['current_mortgage_rate']:.2%}, an average appreciation rate of {appreciation_rate:.1%}, a {property_tax_rate:.2%} annual property tax rate, a {DOWN_PAYMENT_RATIO:.0%} down payment, and a price-to-rent ratio of {price_to_rent_ratio}.")
