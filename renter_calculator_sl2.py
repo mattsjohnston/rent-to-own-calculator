@@ -11,13 +11,14 @@ INSURANCE_FIXED = 120
 MANAGEMENT_FEE_RATE = 0.08
 LOAN_TERM_YEARS = 30
 
-@st.cache_data(ttl=604800)  # Cache for 1 week (604800 seconds)
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_current_mortgage_rate():
     url = "https://api.stlouisfed.org/fred/series/observations?series_id=MORTGAGE30US&api_key=2ff2780e16de4ae8c876b130dc9981fe&file_type=json&limit=1&sort_order=desc"
     response = requests.get(url)
     data = response.json()
     return float(data['observations'][0]['value']) / 100
 
+@st.cache_data(ttl=604800)  # Cache for 1 week
 def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate):
     interest_rate = 0.035
     
@@ -109,6 +110,7 @@ def calculate_estimated_equity(house_price, appreciation_rate, years):
     future_value = house_price * (1 + appreciation_rate) ** years
     return future_value - house_price
 
+@st.cache_data(ttl=604800)  # Cache for 1 week
 def calculate_equity_breakdown(house_price, loan_amount, interest_rate, loan_term_years, appreciation_rate, years):
     # Calculate total principal paid
     total_principal = 0
@@ -122,6 +124,7 @@ def calculate_equity_breakdown(house_price, loan_amount, interest_rate, loan_ter
     
     return total_principal, renter_share_appreciation
 
+@st.cache_data(ttl=604800)  # Cache for 1 week
 def create_equity_pie_chart(total_principal, renter_share_appreciation):
     labels = ['Principal', 'Appreciation']
     values = [total_principal, renter_share_appreciation]
@@ -157,6 +160,7 @@ def create_equity_pie_chart(total_principal, renter_share_appreciation):
             
     return fig
 
+@st.cache_data(ttl=604800)  # Cache for 1 week
 def calculate_comparison_values(house_price, property_tax_rate, appreciation_rate, years, monthly_rent, total_equity, down_payment_ratio, price_to_rent_ratio, investment_return_rate):
     current_mortgage_rate = get_current_mortgage_rate()
     traditional_loan = house_price * (1 - down_payment_ratio)
