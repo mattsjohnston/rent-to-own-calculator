@@ -151,49 +151,73 @@ def calculate_equity_breakdown(house_price, loan_amount, interest_rate, loan_ter
     
     return total_principal, renter_share_appreciation
 
-@st.cache_data(ttl=604800)  # Cache for 1 week
-def create_equity_pie_chart(total_principal, renter_share_appreciation):
-    labels = ['Principal', 'Appreciation']
-    values = [total_principal, renter_share_appreciation]
-    hover_text = [
-        "Monthly amount going towards paying off the loan principal.<br>If you decide to buy the house, this amount will be credited towards your purchase.",
-        "Your share (50%) of the home's appreciation in value over the selected period.<br>When you decide to buy the house, we'll get it re-appraised.<br>If there's any increase in value since the original purchase date,<br>half of that appreciation will be credited towards your purchase of the home."
-    ]
-    custom_colors = ['#0068c9', '#003B72']
+def calculate_equity_over_time(house_price, loan_amount, interest_rate, loan_term_years, appreciation_rate, years):
+    principal_over_time = []
+    appreciation_over_time = []
+    total_principal = 0
+    for month in range(1, years * 12 + 1):
+        principal, _ = calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month)
+        total_principal += principal
+        principal_over_time.append(total_principal)
+        
+        current_year = month / 12
+        appreciation = calculate_estimated_equity(house_price, appreciation_rate, current_year)
+        appreciation_over_time.append(appreciation * 0.5)  # 50% of appreciation
+    
+    return principal_over_time, appreciation_over_time
 
-    fig = go.Figure(data=[go.Pie(
-        labels=labels,
-        values=values,
-        hole=.5,
-        textinfo='label+value',
-        texttemplate='%{label}<br>$%{value:,.2f}',
-        hovertext=hover_text,
-        hoverinfo='text',
-        hoverlabel_align='left',
-        textfont=dict(size=14),
-        marker=dict(colors=custom_colors),
-        sort=False,
-        direction='clockwise',
-        rotation=180  # Start at 9 o'clock position
-    )])
-
+def create_equity_area_chart(principal_over_time, appreciation_over_time, years):
+    x = list(range(1, years * 12 + 1))
+    total_equity = [p + a for p, a in zip(principal_over_time, appreciation_over_time)]
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x, y=principal_over_time,
+        mode='lines',
+        # line=dict(width=0.5, color='#0068C9'),
+        stackgroup='one',
+        name='Principal',
+        hovertemplate='$%{y:,.2f}'
+    ))
+    fig.add_trace(go.Scatter(
+        x=x, y=appreciation_over_time,
+        mode='lines',
+        # line=dict(width=0.5, color='#003B72'),
+        stackgroup='one',
+        name='Appreciation',
+        hovertemplate='$%{y:,.2f}'
+    ))
+    # Add new trace for total equity
+    fig.add_trace(go.Scatter(
+        x=x, y=total_equity,
+        mode='lines',
+        line=dict(width=2, color='#E29578'),
+        name='Total Equity',
+        hovertemplate='$%{y:,.2f}'
+    ))
+    
+    # Add vertical lines for each year
+    for year in range(1, years + 1):
+        fig.add_vline(x=year * 12, line_dash="dash", line_color="gray", opacity=0.7)
+        fig.add_annotation(
+            x=year * 12,
+            y=1,
+            yref="paper",
+            text=f"{year} Year{'s' if year > 1 else ''}",
+            showarrow=False,
+            textangle=-90,
+            yshift=28,
+            font=dict(size=10)
+        )
+    
     fig.update_layout(
-        showlegend=False,
-        autosize=True,
-        margin=dict(l=0, r=0, t=0, b=0),
-        title_text=''
+        title='Equity Build-up Over Time',
+        xaxis_title='Months',
+        yaxis_title='Equity ($)',
+        legend=dict(x=0.01, y=0.99, bgcolor='rgba(255, 255, 255, 0.8)'),
+        hovermode='x unified'
     )
-
-    total_equity = total_principal + renter_share_appreciation
-    fig.add_annotation(
-        text=f"<b>${total_equity:,.2f}</b>",
-        x=0.5,
-        y=0.5,
-        font_size=24,
-        showarrow=False,
-        font=dict(color="black")
-    )
-            
+    
     return fig
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
@@ -307,10 +331,10 @@ subheader_slot.subheader(f"Your monthly rent would be :blue[${monthly_rent:,.2f}
 plot_slot.plotly_chart(fig, use_container_width=True)
 
 # Calculate and display equity breakdown
-total_principal, renter_share_appreciation = calculate_equity_breakdown(house_price, loan_amount, 0.035, LOAN_TERM_YEARS, appreciation_rate, years)
-equity_fig = create_equity_pie_chart(total_principal, renter_share_appreciation)
+principal_over_time, appreciation_over_time = calculate_equity_over_time(house_price, loan_amount, 0.035, LOAN_TERM_YEARS, appreciation_rate, years)
+equity_fig = create_equity_area_chart(principal_over_time, appreciation_over_time, years)
 
-total_equity = total_principal + renter_share_appreciation
+total_equity = principal_over_time[-1] + appreciation_over_time[-1]
 st.subheader(f"You would build an estimated :blue[${total_equity:,.2f}] in equity.")
 st.write("This is assuming a 3.5% annual appreciation, which will depend on the local market.")
 
