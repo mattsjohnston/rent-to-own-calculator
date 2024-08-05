@@ -7,7 +7,7 @@ import numpy_financial as npf
 import requests
 
 # Define constants at the top of the file
-DOWN_PAYMENT_RATIO = 0.2
+DOWN_PAYMENT_RATIO = 0.0
 INSURANCE_FIXED = 120
 MANAGEMENT_FEE_RATE = 0.08
 LOAN_TERM_YEARS = 30
@@ -197,12 +197,13 @@ def create_equity_pie_chart(total_principal, renter_share_appreciation):
     return fig
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
-def calculate_comparison_values(house_price, property_tax_rate, appreciation_rate, years, monthly_rent, total_equity, down_payment_ratio, price_to_rent_ratio, investment_return_rate, marginal_tax_rate, mortgage_rate):
+def calculate_comparison_values(house_price, property_tax_rate, appreciation_rate, years, monthly_rent, total_equity, down_payment_ratio, price_to_rent_ratio, investment_return_rate, marginal_tax_rate, mortgage_rate, pmi_rate):
     traditional_loan = house_price * (1 - down_payment_ratio)
     mortgage_payment = npf.pmt(mortgage_rate/12, LOAN_TERM_YEARS*12, -traditional_loan)
     monthly_insurance = INSURANCE_FIXED
     monthly_property_tax = (house_price * property_tax_rate) / 12
-    traditional_payment = mortgage_payment + monthly_insurance + monthly_property_tax
+    monthly_pmi = (traditional_loan * pmi_rate) / 12 if down_payment_ratio < 0.2 else 0
+    traditional_payment = mortgage_payment + monthly_insurance + monthly_property_tax + monthly_pmi
     traditional_principal = sum(calculate_monthly_breakdown(traditional_loan, mortgage_rate, LOAN_TERM_YEARS, month)[0] for month in range(1, years*12+1))
     traditional_appreciation = calculate_estimated_equity(house_price, appreciation_rate, years)
     traditional_equity = traditional_principal + traditional_appreciation + house_price * down_payment_ratio
@@ -246,7 +247,8 @@ def calculate_comparison_values(house_price, property_tax_rate, appreciation_rat
         'traditional_cost': traditional_cost,
         'renting_cost': renting_cost,
         'price_to_rent_ratio': price_to_rent_ratio,
-        'tax_savings': tax_savings
+        'tax_savings': tax_savings,
+        'monthly_pmi': monthly_pmi
     }
 
 # Sidebar inputs
@@ -263,6 +265,7 @@ with st.sidebar:
         investment_return_rate = st.number_input("Investment Return Rate (%)", min_value=0.0, max_value=20.0, value=5.0, step=0.1, help="The rate of return you expect to earn in an investment account. This is used to calculate the opportunity cost of the down payment if you were to invest it instead of using it for a traditional mortgage.") / 100
         price_to_rent_ratio = st.number_input("Price-to-Rent Ratio", min_value=1, max_value=50, value=19, step=1, help="The ratio of the price of the home to the rent of a similar home. This is used to calculate the monthly rent of an equivalent home for comparison purposes.")
         marginal_tax_rate = st.number_input("Marginal Tax Rate (%)", min_value=0.0, max_value=50.0, value=16.0, step=0.1, help="Your marginal tax rate. This is used to calculate the tax savings from the mortgage interest deduction.") / 100
+        pmi_rate = st.number_input("PMI Rate (%)", min_value=0.0, max_value=5.0, value=1.5, step=0.1, help="Private Mortgage Insurance rate. This is typically required when the down payment is less than 20% of the home value.") / 100
 
 # Set up the main title and description
 st.title("Rent-to-Own Calculator")
@@ -270,7 +273,7 @@ st.write("This tool enables you to determine the equity you will own in your hom
 
 # Basic price input
 col1, col2 = st.columns(2)
-house_price = col1.number_input("Enter the price of the home you are considering:", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
+house_price = col1.number_input("Enter the price of the home you are considering ($)", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
 
 add_vertical_space(1)
 
@@ -313,9 +316,11 @@ st.write("This is assuming a 3.5% annual appreciation, which will depend on the 
 
 add_vertical_space(1)
 st.plotly_chart(equity_fig, use_container_width=True)
-add_vertical_space(1)
+add_vertical_space(3)
+
 
 row1 = row([10, 1], vertical_align="center")
+
 # Comparison of different scenarios
 row1.markdown(f"#### In :blue[{years}] years, how does the cost compare to renting?")
 
@@ -331,6 +336,10 @@ with row1.popover(":gear:"):
         value=True,
         help="If enabled, includes the tax savings from mortgage interest deductions in the calculations."
     )
+    down_payment = st.number_input("Your down payment for a traditional mortgage ($)", min_value=0.0, max_value=house_price, value=0.0, step=1000.0, format="%.0f")
+
+# Calculate down payment ratio
+down_payment_ratio = down_payment / house_price
 
 # Calculate comparison values
 comparison_values = calculate_comparison_values(
@@ -340,14 +349,14 @@ comparison_values = calculate_comparison_values(
     years, 
     monthly_rent, 
     total_equity, 
-    DOWN_PAYMENT_RATIO, 
+    down_payment_ratio, 
     price_to_rent_ratio, 
     investment_return_rate, 
     marginal_tax_rate,
-    mortgage_rate
+    mortgage_rate,
+    pmi_rate
 )
 
-add_vertical_space(1)
 # Recalculate costs based on toggle settings
 if not include_opportunity_cost:
     comparison_values['traditional_cost'] -= (comparison_values['traditional_cost'] - comparison_values['traditional_spent'] + comparison_values['traditional_equity'])
@@ -358,17 +367,19 @@ if not include_tax_deductions:
 # Create full comparison data
 comparison_data = {
     "": ["Initial purchase price", "Down payment", "Interest rate", "Appreciation share", "Monthly payment", 
-         f"Total equity ({years} years)", f"Total spent ({years} years)",
+         "Monthly PMI", f"Total equity ({years} years)", f"Total spent ({years} years)",
          "Down payment opportunity cost", "Tax savings (mortgage interest)", "Total true cost"],
     "Rent to Own": [f"${house_price:,.0f}", "$0", f"{0.035:.1%}", "50%", f"${monthly_rent:,.0f}", 
-                    f"${total_equity:,.0f}", f"${comparison_values['rent_to_own_spent']:,.0f}",
+                    "$0", f"${total_equity:,.0f}", f"${comparison_values['rent_to_own_spent']:,.0f}",
                     "$0", "$0", f"${comparison_values['rent_to_own_cost']:,.0f}"],
     "Traditional Mortgage": [f"${house_price:,.0f}", f"${comparison_values['down_payment']:,.0f}", f"{comparison_values['mortgage_rate']:.2%}", "100%", 
-                             f"${comparison_values['traditional_payment']:,.0f}", f"${comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_spent']:,.0f}",
+                             f"${comparison_values['traditional_payment']:,.0f}", 
+                             f"${comparison_values['monthly_pmi']:,.0f}",
+                             f"${comparison_values['traditional_equity']:,.0f}", f"${comparison_values['traditional_spent']:,.0f}",
                              f"${comparison_values['traditional_cost'] - comparison_values['traditional_spent'] + comparison_values['traditional_equity']:,.0f}",
                              f"${comparison_values['tax_savings']:,.0f}", f"${comparison_values['traditional_cost']:,.0f}"],
     "Renting": ["$0", "$0", "", "0%", f"${comparison_values['rental_payment']:,.0f}", 
-                "$0", f"${comparison_values['renting_spent']:,.0f}",
+                "$0", "$0", f"${comparison_values['renting_spent']:,.0f}",
                 "$0", "$0", f"${comparison_values['renting_cost']:,.0f}"]
 }
 
@@ -436,4 +447,4 @@ with st.expander("🔍 See the full comparison table"):
     """)
 
 # Add caption explaining assumptions
-st.caption(f"This looks at all the money you'll be spending on a house minus your gained equity and appreciation. We're assuming a mortgage rate of {comparison_values['mortgage_rate']:.2%}, an average appreciation rate of {appreciation_rate:.1%}, a {property_tax_rate:.2%} annual property tax rate, a {DOWN_PAYMENT_RATIO:.0%} down payment, a price-to-rent ratio of {price_to_rent_ratio}, and a marginal tax rate of {marginal_tax_rate:.1%}.")
+st.caption(f"This looks at all the money you'll be spending on a house minus your gained equity and appreciation. We're assuming a mortgage rate of {comparison_values['mortgage_rate']:.2%}, an average appreciation rate of {appreciation_rate:.1%}, a {property_tax_rate:.2%} annual property tax rate, a {down_payment_ratio:.1%} down payment with {pmi_rate:.1%} PMI (if applicable), a price-to-rent ratio of {price_to_rent_ratio}, and a marginal tax rate of {marginal_tax_rate:.1%}.")
