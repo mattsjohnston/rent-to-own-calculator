@@ -8,7 +8,7 @@ import requests
 
 # Define constants at the top of the file
 DOWN_PAYMENT_RATIO = 0.0
-INSURANCE_FIXED = 120
+INSURANCE_FIXED = 150
 MANAGEMENT_FEE_RATE = 0.08
 LOAN_TERM_YEARS = 30
 DEFAULT_YEARS = 4  # New constant for default years
@@ -21,7 +21,7 @@ def get_current_mortgage_rate():
     return float(data['observations'][0]['value']) / 100
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
-def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate):
+def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost):
     interest_rate = 0.035
     
     closing_costs = house_price * closing_costs_rate
@@ -34,9 +34,9 @@ def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, ap
     
     monthly_interest = (total_purchase_price * interest_rate) / 12
     monthly_principal = mortgage_payment - monthly_interest
-    monthly_insurance = INSURANCE_FIXED
+    monthly_insurance = insurance_cost
     monthly_property_tax = (house_price * property_tax_rate) / 12
-    monthly_management_fee = mortgage_payment * MANAGEMENT_FEE_RATE
+    monthly_management_fee = MANAGEMENT_FEE_RATE * (mortgage_payment + monthly_property_tax + monthly_insurance)
     
     monthly_rent = mortgage_payment + monthly_insurance + monthly_property_tax + monthly_management_fee
 
@@ -66,8 +66,8 @@ def calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, mon
     
     return principal, interest
 
-def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years):
-    house_price, monthly_rent, breakdown, interest_rate, loan_term_years = calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate)
+def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost):
+    house_price, monthly_rent, breakdown, interest_rate, loan_term_years = calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost)
     
     # Calculate loan amount
     loan_amount = house_price * (1 + closing_costs_rate)
@@ -221,10 +221,10 @@ def create_equity_area_chart(principal_over_time, appreciation_over_time, years)
     return fig
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
-def calculate_comparison_values(house_price, property_tax_rate, appreciation_rate, years, monthly_rent, total_equity, down_payment_ratio, price_to_rent_ratio, investment_return_rate, marginal_tax_rate, mortgage_rate, pmi_rate):
+def calculate_comparison_values(house_price, property_tax_rate, appreciation_rate, years, monthly_rent, total_equity, down_payment_ratio, price_to_rent_ratio, investment_return_rate, marginal_tax_rate, mortgage_rate, pmi_rate, insurance_cost):
     traditional_loan = house_price * (1 - down_payment_ratio)
     mortgage_payment = npf.pmt(mortgage_rate/12, LOAN_TERM_YEARS*12, -traditional_loan)
-    monthly_insurance = INSURANCE_FIXED
+    monthly_insurance = insurance_cost
     monthly_property_tax = (house_price * property_tax_rate) / 12
     monthly_pmi = (traditional_loan * pmi_rate) / 12 if down_payment_ratio < 0.2 else 0
     traditional_payment = mortgage_payment + monthly_insurance + monthly_property_tax + monthly_pmi
@@ -284,12 +284,13 @@ with st.sidebar:
         current_mortgage_rate = get_current_mortgage_rate()
         mortgage_rate = st.number_input("Mortgage Rate (%)", min_value=0.0, max_value=15.0, value=current_mortgage_rate*100, step=0.1, help="The annual mortgage interest rate. Defaults to the current 30-year fixed rate from FRED.") / 100
         appreciation_rate = st.number_input("Annual Appreciation Rate (%)", min_value=0.0, max_value=10.0, value=3.5, step=0.1) / 100
-        closing_costs_rate = st.number_input("Closing Costs (%)", min_value=0.0, max_value=10.0, value=3.0, step=0.1) / 100
+        closing_costs_rate = st.number_input("Closing Costs (%)", min_value=0.0, max_value=10.0, value=0.75, step=0.1) / 100
         property_tax_rate = st.number_input("Property Tax Rate (%)", min_value=0.0, max_value=5.0, value=1.122, step=0.001) / 100
         investment_return_rate = st.number_input("Investment Return Rate (%)", min_value=0.0, max_value=20.0, value=5.0, step=0.1, help="The rate of return you expect to earn in an investment account. This is used to calculate the opportunity cost of the down payment if you were to invest it instead of using it for a traditional mortgage.") / 100
         price_to_rent_ratio = st.number_input("Price-to-Rent Ratio", min_value=1, max_value=50, value=19, step=1, help="The ratio of the price of the home to the rent of a similar home. This is used to calculate the monthly rent of an equivalent home for comparison purposes.")
         marginal_tax_rate = st.number_input("Marginal Tax Rate (%)", min_value=0.0, max_value=50.0, value=16.0, step=0.1, help="Your marginal tax rate. This is used to calculate the tax savings from the mortgage interest deduction.") / 100
         pmi_rate = st.number_input("PMI Rate (%)", min_value=0.0, max_value=5.0, value=1.5, step=0.1, help="Private Mortgage Insurance rate. This is typically required when the down payment is less than 20% of the home value.") / 100
+        insurance_cost = st.number_input("Monthly Home Insurance ($)", min_value=0, max_value=1000, value=INSURANCE_FIXED, step=10, help="Monthly cost of home insurance.")
 
 # Set up the main title and description
 st.title("Rent-to-Own Calculator")
@@ -325,7 +326,7 @@ add_vertical_space(1)
 years = st.slider("Select the number of years you plan to rent the home.", min_value=1, max_value=7, value=DEFAULT_YEARS, step=1)
 
 # Calculate initial values with default years
-fig, house_price, loan_amount, monthly_rent = update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years)
+fig, house_price, loan_amount, monthly_rent = update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost)
 
 subheader_slot.subheader(f"Your monthly rent would be :blue[${monthly_rent:,.2f}].")
 plot_slot.plotly_chart(fig, use_container_width=True)
@@ -378,7 +379,8 @@ comparison_values = calculate_comparison_values(
     investment_return_rate, 
     marginal_tax_rate,
     mortgage_rate,
-    pmi_rate
+    pmi_rate,
+    insurance_cost
 )
 
 # Recalculate costs based on toggle settings
