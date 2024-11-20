@@ -8,11 +8,13 @@ import requests
 import streamlit_analytics2 as streamlit_analytics
 
 # Define constants at the top of the file
+DEFAULT_INTEREST_RATE = 0.035
 DOWN_PAYMENT_RATIO = 0.0
 INSURANCE_FIXED = 150
 MANAGEMENT_FEE_RATE = 0.08
 LOAN_TERM_YEARS = 30
-DEFAULT_YEARS = 4  # New constant for default years
+DEFAULT_YEARS = 4
+DEFAULT_PRINCIPAL_RATIO = 0.3
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_current_mortgage_rate():
@@ -22,85 +24,68 @@ def get_current_mortgage_rate():
     return float(data['observations'][0]['value']) / 100
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
-def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost):
-    interest_rate = 0.035
-    
+def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost, principal_ratio, interest_rate):
     closing_costs = house_price * closing_costs_rate
     total_purchase_price = house_price + closing_costs
     
-    # Calculate mortgage payment
-    monthly_rate = interest_rate / 12
-    num_payments = LOAN_TERM_YEARS * 12
-    mortgage_payment = total_purchase_price * (monthly_rate * (1 + monthly_rate)**num_payments) / ((1 + monthly_rate)**num_payments - 1)
-    
     monthly_interest = (total_purchase_price * interest_rate) / 12
-    monthly_principal = mortgage_payment - monthly_interest
     monthly_insurance = insurance_cost
     monthly_property_tax = (house_price * property_tax_rate) / 12
-    monthly_management_fee = MANAGEMENT_FEE_RATE * (mortgage_payment + monthly_property_tax + monthly_insurance)
     
-    monthly_rent = mortgage_payment + monthly_insurance + monthly_property_tax + monthly_management_fee
-
+    monthly_payment = (monthly_interest + monthly_insurance + monthly_property_tax) / (1 - principal_ratio)
+    monthly_principal = monthly_payment * principal_ratio
+    
+    print(f"Monthly payment: ${monthly_payment:.2f}")
+    print(f"Monthly principal: ${monthly_principal:.2f}")
+    print(f"Principal percentage: {(monthly_principal/monthly_payment)*100:.1f}%")
+    print(f"Monthly interest: ${monthly_interest:.2f}")
+    print(f"Monthly insurance: ${monthly_insurance:.2f}")
+    print(f"Monthly property tax: ${monthly_property_tax:.2f}")
+    
     breakdown = {
         "Principal": monthly_principal,
         "Interest": monthly_interest,
         "Insurance": monthly_insurance,
-        "Property Tax": monthly_property_tax,
-        "Management Fee": monthly_management_fee
+        "Property Tax": monthly_property_tax
     }
     
-    return house_price, monthly_rent, breakdown, interest_rate, LOAN_TERM_YEARS
+    return house_price, monthly_payment, breakdown, interest_rate, LOAN_TERM_YEARS
 
-def calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month):
-    monthly_rate = interest_rate / 12
-    num_payments = loan_term_years * 12
-    
-    # Calculate the monthly payment using numpy financial
-    monthly_payment = -npf.pmt(monthly_rate, num_payments, loan_amount)
-    
-    # Calculate the remaining balance
-    remaining_balance = npf.fv(monthly_rate, month - 1, monthly_payment, -loan_amount)
-    
-    # Calculate interest and principal for the specific month
-    interest = remaining_balance * monthly_rate
-    principal = monthly_payment - interest
-    
-    return principal, interest
+def calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month, is_rent_to_own=False):
+    if is_rent_to_own:
+        # Use the same calculation as calculate_rent_to_own
+        monthly_interest = (loan_amount * DEFAULT_INTEREST_RATE) / 12
+        monthly_payment = monthly_interest / 0.7  # Interest is part of the 70%
+        monthly_principal = monthly_payment * 0.3
+        return monthly_principal, monthly_interest
+    else:
+        # Traditional mortgage calculation (unchanged)
+        monthly_rate = interest_rate / 12
+        num_payments = loan_term_years * 12
+        monthly_payment = -npf.pmt(monthly_rate, num_payments, loan_amount)
+        remaining_balance = npf.fv(monthly_rate, month - 1, monthly_payment, -loan_amount)
+        interest = remaining_balance * monthly_rate
+        principal = monthly_payment - interest
+        return principal, interest
 
-def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost):
-    house_price, monthly_rent, breakdown, interest_rate, loan_term_years = calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost)
+def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost, principal_ratio, interest_rate):
+    house_price, monthly_rent, breakdown, interest_rate, loan_term_years = calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost, principal_ratio, interest_rate)
     
-    # Calculate loan amount
+    # Calculate loan amount (needed for other calculations)
     loan_amount = house_price * (1 + closing_costs_rate)
-    
-    # Calculate average principal and interest over the specified years
-    total_principal = 0
-    total_interest = 0
-    for month in range(1, years * 12 + 1):
-        principal, interest = calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month)
-        total_principal += principal
-        total_interest += interest
-    
-    avg_principal = total_principal / (years * 12)
-    avg_interest = total_interest / (years * 12)
-    
-    # Update breakdown with new average principal and interest values
-    breakdown['Principal'] = avg_principal
-    breakdown['Interest'] = avg_interest
     
     # Create pie chart
     labels = list(breakdown.keys())
     values = list(breakdown.values())
     
     # Define custom colors
-    custom_colors = ['#0068C9', '#83C5BE', '#EDF6F9', '#FFDDD2', '#E29578']
+    custom_colors = ['#0068C9', '#83C5BE', '#EDF6F9', '#FFDDD2']
 
     hover_text = [
         "Monthly amount going towards paying off the loan principal.<br>If you decide to buy the house, this amount will be credited towards your purchase.",
         "Monthly financing cost, calculated based on a 3.5% annual rate.<br>This represents the cost of the rent-to-own arrangement.",
         "Monthly homeowner's insurance cost",
-        "Monthly property tax based on the home's value",
-        "Monthly fee for property management services"
+        "Monthly property tax based on the home's value"
     ]
 
     fig = go.Figure(data=[go.Pie(
@@ -113,15 +98,9 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
         hoverinfo='text',
         hoverlabel_align='left',
         textfont=dict(size=14),
-        marker=dict(colors=custom_colors)  # Add this line to use custom colors
+        marker=dict(colors=custom_colors)
     )])
-    fig.update_layout(
-        showlegend=False,
-        autosize=True,
-        margin=dict(l=0, r=0, t=0, b=0),
-        title_text=''
-    )
-
+    
     # Add total monthly rent to the center of the pie chart
     fig.add_annotation(
         text=f"<b>${monthly_rent:,.2f}</b>/mo",  # Updated format
@@ -130,6 +109,12 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
         font_size=24,
         showarrow=False,
         font=dict(color="black")
+    )
+    fig.update_layout(
+        showlegend=False,
+        autosize=True,
+        margin=dict(l=0, r=0, t=0, b=0),
+        title_text=''
     )
             
     return fig, house_price, loan_amount, monthly_rent
@@ -143,7 +128,7 @@ def calculate_equity_breakdown(house_price, loan_amount, interest_rate, loan_ter
     # Calculate total principal paid
     total_principal = 0
     for month in range(1, years * 12 + 1):
-        principal, _ = calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month)
+        principal, _ = calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month, is_rent_to_own=True)
         total_principal += principal
     
     # Calculate appreciation
@@ -157,7 +142,7 @@ def calculate_equity_over_time(house_price, loan_amount, interest_rate, loan_ter
     appreciation_over_time = []
     total_principal = 0
     for month in range(1, years * 12 + 1):
-        principal, _ = calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month)
+        principal, _ = calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month, is_rent_to_own=True)
         total_principal += principal
         principal_over_time.append(total_principal)
         
@@ -232,7 +217,7 @@ def calculate_cumulative_values(house_price, monthly_rent, years, appreciation_r
         rent_to_own_spent.append(monthly_rent * month)
         
         # Calculate saved (equity) for rent to own
-        principal, _ = calculate_monthly_breakdown(house_price, 0.035, LOAN_TERM_YEARS, month)
+        principal, _ = calculate_monthly_breakdown(house_price, DEFAULT_INTEREST_RATE, LOAN_TERM_YEARS, month, is_rent_to_own=True)
         appreciation = calculate_estimated_equity(house_price, appreciation_rate, month/12) * 0.5
         rent_to_own_saved.append(principal + appreciation)
         
@@ -289,7 +274,7 @@ def calculate_comparison_values(house_price, property_tax_rate, appreciation_rat
     monthly_property_tax = (house_price * property_tax_rate) / 12
     monthly_pmi = (traditional_loan * pmi_rate) / 12 if down_payment_ratio < 0.2 else 0
     traditional_payment = mortgage_payment + monthly_insurance + monthly_property_tax + monthly_pmi
-    traditional_principal = sum(calculate_monthly_breakdown(traditional_loan, mortgage_rate, LOAN_TERM_YEARS, month)[0] for month in range(1, years*12+1))
+    traditional_principal = sum(calculate_monthly_breakdown(traditional_loan, mortgage_rate, LOAN_TERM_YEARS, month, is_rent_to_own=True)[0] for month in range(1, years*12+1))
     traditional_appreciation = calculate_estimated_equity(house_price, appreciation_rate, years)
     traditional_equity = traditional_principal + traditional_appreciation + house_price * down_payment_ratio
 
@@ -317,7 +302,7 @@ def calculate_comparison_values(house_price, property_tax_rate, appreciation_rat
     renting_cost = renting_spent - rental_equity + renting_opportunity_cost
 
     # Calculate total interest paid for traditional mortgage
-    total_interest_paid = sum(calculate_monthly_breakdown(traditional_loan, mortgage_rate, LOAN_TERM_YEARS, month)[1] for month in range(1, years*12+1))
+    total_interest_paid = sum(calculate_monthly_breakdown(traditional_loan, mortgage_rate, LOAN_TERM_YEARS, month, is_rent_to_own=True)[1] for month in range(1, years*12+1))
     
     # Calculate tax savings from mortgage interest deduction
     tax_savings = total_interest_paid * marginal_tax_rate
@@ -356,7 +341,7 @@ with streamlit_analytics.track():
             current_mortgage_rate = get_current_mortgage_rate()
             mortgage_rate = st.number_input("Mortgage Rate (%)", min_value=0.0, max_value=15.0, value=current_mortgage_rate*100, step=0.1, help="The annual mortgage interest rate. Defaults to the current 30-year fixed rate from FRED.") / 100
             appreciation_rate = st.number_input("Annual Appreciation Rate (%)", min_value=0.0, max_value=10.0, value=3.5, step=0.1) / 100
-            closing_costs_rate = st.number_input("Closing Costs (%)", min_value=0.0, max_value=10.0, value=0.75, step=0.1) / 100
+            closing_costs_rate = st.number_input("Closing Costs & Inspections (%)", min_value=0.0, max_value=10.0, value=1.0, step=0.1, help="These costs will be added to the total purchase price of the home.") / 100
             property_tax_rate = st.number_input("Property Tax Rate (%)", min_value=0.0, max_value=5.0, value=1.122, step=0.001) / 100
             yearly_rent_increase = st.number_input("Yearly Rent Increase (%)", min_value=0.0, max_value=10.0, value=4.0, step=0.1, help="The percentage by which rent increases each year for traditional renting.") / 100
             investment_return_rate = st.number_input("Investment Return Rate (%)", min_value=0.0, max_value=20.0, value=5.0, step=0.1, help="The rate of return you expect to earn in an investment account. This is used to calculate the opportunity cost of the down payment if you were to invest it instead of using it for a traditional mortgage.") / 100
@@ -364,6 +349,22 @@ with streamlit_analytics.track():
             marginal_tax_rate = st.number_input("Marginal Tax Rate (%)", min_value=0.0, max_value=50.0, value=16.0, step=0.1, help="Your marginal tax rate. This is used to calculate the tax savings from the mortgage interest deduction.") / 100
             pmi_rate = st.number_input("PMI Rate (%)", min_value=0.0, max_value=5.0, value=1.5, step=0.1, help="Private Mortgage Insurance rate. This is typically required when the down payment is less than 20% of the home value.") / 100
             insurance_cost = st.number_input("Monthly Home Insurance ($)", min_value=0, max_value=1000, value=INSURANCE_FIXED, step=10, help="Monthly cost of home insurance.")
+            principal_ratio = st.number_input(
+                "Principal Ratio (%)", 
+                min_value=10.0, 
+                max_value=50.0, 
+                value=DEFAULT_PRINCIPAL_RATIO * 100, 
+                step=1.0, 
+                help="The percentage of your monthly payment that goes towards the principal."
+            ) / 100
+            rent_to_own_interest = st.number_input(
+                "Rent-to-Own Interest Rate (%)", 
+                min_value=0.0, 
+                max_value=15.0, 
+                value=DEFAULT_INTEREST_RATE * 100, 
+                step=0.1, 
+                help="The annual interest rate for the rent-to-own arrangement."
+            ) / 100
 
     # Set up the main title and description
     st.title("Rent-to-Own Calculator")
@@ -372,6 +373,7 @@ with streamlit_analytics.track():
     # Basic price input
     col1, col2 = st.columns(2)
     house_price = col1.number_input("Enter the price of the home you are considering ($)", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
+    st.caption(f"Note: Closing costs & inspections of {closing_costs_rate*100:.1f}% (${house_price * closing_costs_rate:,.0f}) will be added to the total purchase price.")
 
     add_vertical_space(1)
 
@@ -414,13 +416,22 @@ with streamlit_analytics.track():
     #     st.rerun()
 
     # Calculate initial values with default years
-    fig, house_price, loan_amount, monthly_rent = update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost)
+    fig, house_price, loan_amount, monthly_rent = update_calculator(
+        house_price, 
+        closing_costs_rate, 
+        property_tax_rate, 
+        appreciation_rate, 
+        years, 
+        insurance_cost,
+        principal_ratio,
+        rent_to_own_interest
+    )
 
     subheader_slot.subheader(f"Your monthly rent would be :blue[${monthly_rent:,.2f}].")
     plot_slot.plotly_chart(fig, use_container_width=True)
 
     # Calculate and display equity breakdown
-    principal_over_time, appreciation_over_time = calculate_equity_over_time(house_price, loan_amount, 0.035, LOAN_TERM_YEARS, appreciation_rate, years)
+    principal_over_time, appreciation_over_time = calculate_equity_over_time(house_price, loan_amount, DEFAULT_INTEREST_RATE, LOAN_TERM_YEARS, appreciation_rate, years)
     equity_fig = create_equity_area_chart(principal_over_time, appreciation_over_time, years)
 
     total_equity = principal_over_time[-1] + appreciation_over_time[-1]
@@ -484,7 +495,7 @@ with streamlit_analytics.track():
         "": ["Initial purchase price", "Down payment", "Interest rate", "Appreciation share", "Monthly payment", 
             "Monthly PMI", f"Total equity ({years} years)", f"Total spent ({years} years)",
             "Down payment opportunity cost", "Tax savings (mortgage interest)", "Total true cost"],
-        "Rent to Own": [f"${house_price:,.0f}", "$0", f"{0.035:.1%}", "50%", f"${monthly_rent:,.0f}", 
+        "Rent to Own": [f"${house_price:,.0f}", "$0", f"{DEFAULT_INTEREST_RATE:.1%}", "50%", f"${monthly_rent:,.0f}", 
                         "$0", f"${total_equity:,.0f}", f"${comparison_values['rent_to_own_spent']:,.0f}",
                         "$0", "$0", f"${comparison_values['rent_to_own_cost']:,.0f}"],
         "Traditional Mortgage": [f"${house_price:,.0f}", f"${comparison_values['down_payment']:,.0f}", f"{comparison_values['mortgage_rate']:.2%}", "100%", 
