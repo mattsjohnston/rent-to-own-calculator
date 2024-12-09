@@ -8,13 +8,13 @@ import requests
 import streamlit_analytics2 as streamlit_analytics
 
 # Define constants at the top of the file
-DEFAULT_INTEREST_RATE = 0.035
+DEFAULT_INTEREST_RATE = 0.0225
 DOWN_PAYMENT_RATIO = 0.0
 INSURANCE_FIXED = 150
 MANAGEMENT_FEE_RATE = 0.08
 LOAN_TERM_YEARS = 30
 DEFAULT_YEARS = 4
-DEFAULT_PRINCIPAL_RATIO = 0.3
+ANNUAL_PRINCIPAL_PERCENTAGE = 0.03  # 3% of purchase price per year
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_current_mortgage_rate():
@@ -24,23 +24,22 @@ def get_current_mortgage_rate():
     return float(data['observations'][0]['value']) / 100
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
-def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost, principal_ratio, interest_rate):
+def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost, interest_rate):
     closing_costs = house_price * closing_costs_rate
     total_purchase_price = house_price + closing_costs
+    
+    # Calculate monthly principal using the constant
+    monthly_principal = (house_price * ANNUAL_PRINCIPAL_PERCENTAGE) / 12
     
     monthly_interest = (total_purchase_price * interest_rate) / 12
     monthly_insurance = insurance_cost
     monthly_property_tax = (house_price * property_tax_rate) / 12
     
-    monthly_payment = (monthly_interest + monthly_insurance + monthly_property_tax) / (1 - principal_ratio)
-    monthly_principal = monthly_payment * principal_ratio
+    # Calculate total monthly payment by summing all components
+    monthly_payment = monthly_principal + monthly_interest + monthly_insurance + monthly_property_tax
     
-    print(f"Monthly payment: ${monthly_payment:.2f}")
-    print(f"Monthly principal: ${monthly_principal:.2f}")
-    print(f"Principal percentage: {(monthly_principal/monthly_payment)*100:.1f}%")
-    print(f"Monthly interest: ${monthly_interest:.2f}")
-    print(f"Monthly insurance: ${monthly_insurance:.2f}")
-    print(f"Monthly property tax: ${monthly_property_tax:.2f}")
+    # Calculate principal ratio for informational purposes
+    principal_ratio = monthly_principal / monthly_payment
     
     breakdown = {
         "Principal": monthly_principal,
@@ -53,10 +52,9 @@ def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, ap
 
 def calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month, is_rent_to_own=False):
     if is_rent_to_own:
-        # Use the same calculation as calculate_rent_to_own
-        monthly_interest = (loan_amount * DEFAULT_INTEREST_RATE) / 12
-        monthly_payment = monthly_interest / 0.7  # Interest is part of the 70%
-        monthly_principal = monthly_payment * 0.3
+        # Calculate monthly principal using the constant
+        monthly_principal = (loan_amount * ANNUAL_PRINCIPAL_PERCENTAGE) / 12
+        monthly_interest = (loan_amount * interest_rate) / 12
         return monthly_principal, monthly_interest
     else:
         # Traditional mortgage calculation (unchanged)
@@ -68,8 +66,15 @@ def calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, mon
         principal = monthly_payment - interest
         return principal, interest
 
-def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost, principal_ratio, interest_rate):
-    house_price, monthly_rent, breakdown, interest_rate, loan_term_years = calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost, principal_ratio, interest_rate)
+def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost, interest_rate):
+    house_price, monthly_rent, breakdown, interest_rate, loan_term_years = calculate_rent_to_own(
+        house_price, 
+        closing_costs_rate, 
+        property_tax_rate, 
+        appreciation_rate, 
+        insurance_cost,
+        interest_rate
+    )
     
     # Calculate loan amount (needed for other calculations)
     loan_amount = house_price * (1 + closing_costs_rate)
@@ -349,14 +354,6 @@ with streamlit_analytics.track():
             marginal_tax_rate = st.number_input("Marginal Tax Rate (%)", min_value=0.0, max_value=50.0, value=16.0, step=0.1, help="Your marginal tax rate. This is used to calculate the tax savings from the mortgage interest deduction.") / 100
             pmi_rate = st.number_input("PMI Rate (%)", min_value=0.0, max_value=5.0, value=1.5, step=0.1, help="Private Mortgage Insurance rate. This is typically required when the down payment is less than 20% of the home value.") / 100
             insurance_cost = st.number_input("Monthly Home Insurance ($)", min_value=0, max_value=1000, value=INSURANCE_FIXED, step=10, help="Monthly cost of home insurance.")
-            principal_ratio = st.number_input(
-                "Principal Ratio (%)", 
-                min_value=10.0, 
-                max_value=50.0, 
-                value=DEFAULT_PRINCIPAL_RATIO * 100, 
-                step=1.0, 
-                help="The percentage of your monthly payment that goes towards the principal."
-            ) / 100
             rent_to_own_interest = st.number_input(
                 "Rent-to-Own Interest Rate (%)", 
                 min_value=0.0, 
@@ -423,7 +420,6 @@ with streamlit_analytics.track():
         appreciation_rate, 
         years, 
         insurance_cost,
-        principal_ratio,
         rent_to_own_interest
     )
 
