@@ -73,7 +73,7 @@ def update_calculator(house_price, closing_costs_rate, property_tax_rate, apprec
         property_tax_rate, 
         appreciation_rate, 
         insurance_cost,
-        interest_rate
+        DEFAULT_INTEREST_RATE
     )
     
     # Calculate loan amount (needed for other calculations)
@@ -354,14 +354,6 @@ with streamlit_analytics.track():
             marginal_tax_rate = st.number_input("Marginal Tax Rate (%)", min_value=0.0, max_value=50.0, value=16.0, step=0.1, help="Your marginal tax rate. This is used to calculate the tax savings from the mortgage interest deduction.") / 100
             pmi_rate = st.number_input("PMI Rate (%)", min_value=0.0, max_value=5.0, value=1.5, step=0.1, help="Private Mortgage Insurance rate. This is typically required when the down payment is less than 20% of the home value.") / 100
             insurance_cost = st.number_input("Monthly Home Insurance ($)", min_value=0, max_value=1000, value=INSURANCE_FIXED, step=10, help="Monthly cost of home insurance.")
-            rent_to_own_interest = st.number_input(
-                "Rent-to-Own Interest Rate (%)", 
-                min_value=0.0, 
-                max_value=15.0, 
-                value=DEFAULT_INTEREST_RATE * 100, 
-                step=0.1, 
-                help="The annual interest rate for the rent-to-own arrangement."
-            ) / 100
 
     # Set up the main title and description
     st.title("Rent-to-Own Calculator")
@@ -420,7 +412,7 @@ with streamlit_analytics.track():
         appreciation_rate, 
         years, 
         insurance_cost,
-        rent_to_own_interest
+        DEFAULT_INTEREST_RATE
     )
 
     subheader_slot.subheader(f"Your monthly rent would be :blue[${monthly_rent:,.2f}].")
