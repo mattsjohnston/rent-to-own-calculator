@@ -29,7 +29,7 @@ def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, ap
     total_purchase_price = house_price + closing_costs
     
     # Calculate monthly principal using the constant
-    monthly_principal = (house_price * ANNUAL_PRINCIPAL_PERCENTAGE) / 12
+    monthly_principal = (total_purchase_price * ANNUAL_PRINCIPAL_PERCENTAGE) / 12
     
     monthly_interest = (total_purchase_price * interest_rate) / 12
     monthly_insurance = insurance_cost
