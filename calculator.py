@@ -24,8 +24,9 @@ def get_current_mortgage_rate():
     return float(data['observations'][0]['value']) / 100
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
-def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost, interest_rate):
-    closing_costs = house_price * closing_costs_rate
+def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost, interest_rate, include_closing_costs=True):
+    effective_closing_costs_rate = closing_costs_rate if include_closing_costs else 0.0
+    closing_costs = house_price * effective_closing_costs_rate
     total_purchase_price = house_price + closing_costs
     
     # Calculate monthly principal using the constant
@@ -66,14 +67,15 @@ def calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, mon
         principal = monthly_payment - interest
         return principal, interest
 
-def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost, interest_rate):
+def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost, interest_rate, include_closing_costs=True):
     house_price, monthly_rent, breakdown, interest_rate, loan_term_years = calculate_rent_to_own(
         house_price, 
         closing_costs_rate, 
         property_tax_rate, 
         appreciation_rate, 
         insurance_cost,
-        DEFAULT_INTEREST_RATE
+        interest_rate,
+        include_closing_costs
     )
     
     # Calculate loan amount (needed for other calculations)
@@ -362,7 +364,13 @@ with streamlit_analytics.track():
     # Basic price input
     col1, col2 = st.columns(2)
     house_price = col1.number_input("Enter the price of the home you are considering ($)", min_value=0.0, step=5000.0, value=400000.0, format="%.0f")
-    st.caption(f"Note: Closing costs & inspections of {closing_costs_rate*100:.1f}% (${house_price * closing_costs_rate:,.0f}) will be added to the total purchase price.")
+    
+    # Replace caption with toggle
+    include_closing_costs = st.toggle(
+        f"Include {closing_costs_rate*100:.1f}% (${house_price * closing_costs_rate:,.0f}) closing costs",
+        value=True,
+        help="Toggle to include or exclude closing costs & inspections in the total purchase price"
+    )
 
     add_vertical_space(1)
 
@@ -412,7 +420,8 @@ with streamlit_analytics.track():
         appreciation_rate, 
         years, 
         insurance_cost,
-        DEFAULT_INTEREST_RATE
+        DEFAULT_INTEREST_RATE,
+        include_closing_costs
     )
 
     subheader_slot.subheader(f"Your monthly rent would be :blue[${monthly_rent:,.2f}].")
