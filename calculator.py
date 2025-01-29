@@ -14,7 +14,6 @@ INSURANCE_FIXED = 150
 MANAGEMENT_FEE_RATE = 0.08
 LOAN_TERM_YEARS = 30
 DEFAULT_YEARS = 4
-ANNUAL_PRINCIPAL_PERCENTAGE = 0.03  # 3% of purchase price per year
 
 @st.cache_data(ttl=3600)  # Cache for 1 hour
 def get_current_mortgage_rate():
@@ -25,46 +24,73 @@ def get_current_mortgage_rate():
 
 @st.cache_data(ttl=604800)  # Cache for 1 week
 def calculate_rent_to_own(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, insurance_cost, interest_rate, include_closing_costs=True):
+    # First, calculate total purchase price (i.e., loan amount).
+    # If 'include_closing_costs' is True, add those to the purchase price.
     effective_closing_costs_rate = closing_costs_rate if include_closing_costs else 0.0
     closing_costs = house_price * effective_closing_costs_rate
     total_purchase_price = house_price + closing_costs
-    
-    # Calculate monthly principal using the constant
-    monthly_principal = (total_purchase_price * ANNUAL_PRINCIPAL_PERCENTAGE) / 12
-    
-    monthly_interest = (total_purchase_price * interest_rate) / 12
+
+    # 1) Take 2.25% of the total purchase price for the interest (annual). Convert to monthly.
+    monthly_interest = (total_purchase_price * DEFAULT_INTEREST_RATE) / 12
+
+    # 2) Add insurance cost (monthly).
     monthly_insurance = insurance_cost
+
+    # 3) Add property tax (monthly).
     monthly_property_tax = (house_price * property_tax_rate) / 12
-    
-    # Calculate total monthly payment by summing all components
-    monthly_payment = monthly_principal + monthly_interest + monthly_insurance + monthly_property_tax
-    
-    # Calculate principal ratio for informational purposes
-    principal_ratio = monthly_principal / monthly_payment
-    
+
+    # 4) We want principal to be 44% of the total monthly payment.
+    #    Let x = monthly_payment. Then principal is 0.44 * x, and the rest is interest + insurance + property tax.
+    #    So x = (monthly_interest + monthly_insurance + monthly_property_tax) + 0.44 * x
+    #    => x - 0.44x = monthly_interest + monthly_insurance + monthly_property_tax
+    #    => 0.56x = monthly_interest + monthly_insurance + monthly_property_tax
+    #    => x = (monthly_interest + monthly_insurance + monthly_property_tax) / 0.56
+    monthly_payment = (
+        monthly_interest + monthly_insurance + monthly_property_tax
+    ) / 0.56
+    monthly_principal = 0.44 * monthly_payment
+
+    # Prepare a breakdown for clarity.
     breakdown = {
         "Principal": monthly_principal,
         "Interest": monthly_interest,
         "Insurance": monthly_insurance,
-        "Property Tax": monthly_property_tax
+        "Property Tax": monthly_property_tax,
     }
-    
+
+    # We'll still return interest_rate, LOAN_TERM_YEARS for compatibility in the code that calls this function,
+    # but note that we are overriding the interest calculation with a fixed 2.25% here.
     return house_price, monthly_payment, breakdown, interest_rate, LOAN_TERM_YEARS
 
 def calculate_monthly_breakdown(loan_amount, interest_rate, loan_term_years, month, is_rent_to_own=False):
     if is_rent_to_own:
-        # Calculate monthly principal using the constant
-        monthly_principal = (loan_amount * ANNUAL_PRINCIPAL_PERCENTAGE) / 12
-        monthly_interest = (loan_amount * interest_rate) / 12
+        # Use the same logic as the rent-to-own calculation, but per month:
+        # 1) Calculate monthly interest using DEFAULT_INTEREST_RATE.
+        monthly_interest = (loan_amount * DEFAULT_INTEREST_RATE) / 12
+        
+        # 2) Ensure principal is 44% of the total monthly payment:
+        #    Let monthly_payment = x.
+        #    monthly_interest occupies 56% of x (since principal is 44%).
+        #    x = monthly_interest / 0.56
+        monthly_payment = monthly_interest / 0.56
+        monthly_principal = 0.44 * monthly_payment
+
         return monthly_principal, monthly_interest
+
     else:
         # Traditional mortgage calculation (unchanged)
         monthly_rate = interest_rate / 12
         num_payments = loan_term_years * 12
         monthly_payment = -npf.pmt(monthly_rate, num_payments, loan_amount)
+
+        # Calculate remaining balance after (month - 1) payments
         remaining_balance = npf.fv(monthly_rate, month - 1, monthly_payment, -loan_amount)
+
+        # Interest is balance × monthly_rate
         interest = remaining_balance * monthly_rate
+        # Anything left after interest becomes principal
         principal = monthly_payment - interest
+
         return principal, interest
 
 def update_calculator(house_price, closing_costs_rate, property_tax_rate, appreciation_rate, years, insurance_cost, interest_rate, include_closing_costs=True):
@@ -367,7 +393,7 @@ with streamlit_analytics.track():
     
     # Replace caption with toggle
     include_closing_costs = st.toggle(
-        f"Include {closing_costs_rate*100:.1f}% (${house_price * closing_costs_rate:,.0f}) closing costs",
+        f"Automatically add {closing_costs_rate*100:.1f}% (${house_price * closing_costs_rate:,.0f}) closing costs",
         value=True,
         help="Toggle to include or exclude closing costs & inspections in the total purchase price"
     )
